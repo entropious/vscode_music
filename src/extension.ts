@@ -10,7 +10,7 @@ export interface ExtensionApi {
 }
 
 export function activate(context: vscode.ExtensionContext): ExtensionApi {
-  const auth = new Auth(context.secrets);
+  const auth = new Auth(context.secrets, context.globalStorageUri.fsPath);
   const config = () => vscode.workspace.getConfiguration('yandexMusic');
   const clientFactory = async () => new YandexMusicClient(config().get<string>('apiBaseUrl', 'https://api.music.yandex.net'), await auth.getToken());
 
@@ -37,13 +37,13 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
       guard(async () => {
         const choice = await vscode.window.showQuickPick(
           [
-            { label: '$(globe) Войти через браузер', description: 'код подтверждения на ya.ru/device', id: 'device' },
+            { label: '$(globe) Войти через браузер', description: 'откроется окно входа Яндекса', id: 'browser' },
             { label: '$(key) Ввести OAuth-токен', description: 'если токен уже есть', id: 'token' },
           ],
           { placeHolder: 'Как войти в Яндекс Музыку?' },
         );
-        if (choice?.id === 'device') {
-          const token = await auth.signInWithDeviceCode(config().get<string>('oauthBaseUrl', 'https://oauth.yandex.ru'));
+        if (choice?.id === 'browser') {
+          const token = await auth.signInWithBrowser(config().get<string>('oauthBaseUrl', 'https://oauth.yandex.ru'));
           if (token) {
             const acc = await player.refreshAccount();
             vscode.window.showInformationMessage(`Яндекс Музыка: вы вошли как ${acc?.login ?? '?'}`);
