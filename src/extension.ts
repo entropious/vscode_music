@@ -130,6 +130,8 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     vscode.commands.registerCommand('yandexMusic.getStatus', () => player.getStatus()),
   );
 
+  void player.preloadWave().catch(() => undefined);
+
   return { player, auth };
 }
 

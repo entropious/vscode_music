@@ -59,6 +59,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   /** Кодек и битрейт текущего потока, например «MP3 320 кбит/с». */
   private streamInfo?: string;
   private lastTooltip?: string;
+  /** Трек, чей поток отдан в webview; у предзагруженной волны его ещё нет. */
+  private loadedTrackId?: string;
 
   private readonly prevItem: vscode.StatusBarItem;
   private readonly playItem: vscode.StatusBarItem;
@@ -107,6 +109,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       view.onDidDispose(() => {
         this.view = undefined;
         this.viewReady = undefined;
+        this.loadedTrackId = undefined;
         this.status = { ...this.status, playing: false };
         this.updateStatusBar();
       }),
@@ -294,6 +297,34 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   // ---------------------------------------------------------------- sources
 
   async playSource(source: Source): Promise<void> {
+    const tracks = await this.fetchSource(source);
+    this.source = source;
+    this.queue = tracks;
+    await this.playIndex(0);
+  }
+
+  /**
+   * На старте ставит в очередь «Мою волну» без воспроизведения: первый трек
+   * виден в статус-баре, звук загружается по первому нажатию play.
+   */
+  async preloadWave(): Promise<void> {
+    if (this.index >= 0 || !(await this.refreshAccount())) {
+      return;
+    }
+    const source: Source = { kind: 'wave' };
+    const tracks = await this.fetchSource(source);
+    if (this.index >= 0) {
+      return; // пока грузили, пользователь уже что-то включил
+    }
+    this.source = source;
+    this.queue = tracks;
+    this.index = 0;
+    this.status = { playing: false, position: 0, duration: 0 };
+    this.pushState();
+    this.updateStatusBar();
+  }
+
+  private async fetchSource(source: Source): Promise<Track[]> {
     const client = await this.clientFactory();
     let tracks: Track[];
     switch (source.kind) {
@@ -317,9 +348,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     if (!tracks.length) {
       throw new Error(`Нет доступных треков: ${this.sourceLabelFor(source)}`);
     }
-    this.source = source;
-    this.queue = tracks;
-    await this.playIndex(0);
+    return tracks;
   }
 
   private sourceLabelFor(s: Source): string {
@@ -386,6 +415,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       vscode.window.setStatusBarMessage('Яндекс Музыка: без Плюса доступен только 30-секундный фрагмент', 5000);
     }
     this.post({ type: 'load', url, trackId: track.id, autoplay: true });
+    this.loadedTrackId = track.id;
 
     if (this.source?.kind === 'wave' && this.queue.length - index <= 2) {
       void this.loadMoreWave();
@@ -415,6 +445,10 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       await this.playSource(this.account ? { kind: 'wave' } : { kind: 'search', query: 'Хиты' });
       return;
     }
+    if (this.loadedTrackId !== this.current()?.id) {
+      await this.playIndex(this.index);
+      return;
+    }
     await this.ensureView();
     this.post({ type: 'toggle' });
   }
@@ -431,7 +465,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   async previous(): Promise<void> {
-    if (this.status.position > 3 || this.index === 0) {
+    const loaded = this.loadedTrackId === this.current()?.id;
+    if (loaded && (this.status.position > 3 || this.index === 0)) {
       this.post({ type: 'seek', value: 0 });
       return;
     }

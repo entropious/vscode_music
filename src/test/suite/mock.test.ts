@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import type { ExtensionApi } from '../../extension';
 import { MOCK_TOKEN, startMockServer } from '../mockServer';
 import { status, waitFor } from './helpers';
 
@@ -38,6 +39,21 @@ suite('Яндекс Музыка: логика на mock-API', function () {
   test('вход по токену', async () => {
     const acc: any = await vscode.commands.executeCommand('yandexMusic.setToken', MOCK_TOKEN);
     assert.strictEqual(acc.login, 'tester');
+  });
+
+  test('на старте «Моя волна» встаёт в очередь без воспроизведения, play её запускает', async () => {
+    const api = vscode.extensions.getExtension<ExtensionApi>('entropious.vscode-yandex-music')!.exports;
+    await api.player.preloadWave();
+    const s = await status();
+    assert.strictEqual(s.source, 'Моя волна');
+    assert.strictEqual(s.index, 0);
+    assert.ok(s.title?.includes('Тестовый трек 1'), s.title);
+    assert.strictEqual(s.playing, false);
+    assert.ok(!server.log.some((l) => l.startsWith('GET /get-mp3/')), 'до нажатия play поток не запрашивается');
+
+    await vscode.commands.executeCommand('yandexMusic.playPause');
+    await waitFor('загрузки трека в webview', async () => (await status()).duration > 7);
+    assert.ok(server.log.some((l) => l.startsWith('GET /get-mp3/')));
   });
 
   test('«Моя волна»: подписанная ссылка на MP3 отдаётся в webview, без клика просит жест', async () => {
