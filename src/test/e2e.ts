@@ -1,0 +1,264 @@
+/**
+ * Сквозной тест в настоящем VS Code: Playwright управляет окном как пользователь
+ * (палитра команд, клики мышью, горячие клавиши), а звук записывается
+ * с монитора PulseAudio и анализируется.
+ *
+ *   YM_AUDIO_DEVICE=<sink>.monitor xvfb-run -a npm run e2e              # mock-API Яндекс Музыки
+ *   YM_TOKEN=<oauth> YM_AUDIO_DEVICE=... xvfb-run -a npm run e2e        # настоящая Яндекс Музыка
+ */
+import * as assert from 'assert';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
+import { _electron as electron, FrameLocator, Page } from 'playwright-core';
+import { downloadAndUnzipVSCode } from '@vscode/test-electron';
+import { audioProbeAvailable, recordAudio } from './audioProbe';
+import { MOCK_TOKEN, startMockServer } from './mockServer';
+
+const root = path.resolve(__dirname, '../..');
+const shots = path.join(root, 'screenshots');
+const real = !!process.env.YM_TOKEN;
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function step<T>(name: string, fn: () => Promise<T>): Promise<T> {
+  process.stdout.write(`• ${name} … `);
+  const t = Date.now();
+  const r = await fn();
+  console.log(`ok (${((Date.now() - t) / 1000).toFixed(1)}s)`);
+  return r;
+}
+
+async function until<T>(what: string, fn: () => Promise<T | false | undefined>, ms = 20000): Promise<T> {
+  const deadline = Date.now() + ms;
+  while (Date.now() < deadline) {
+    const v = await fn().catch(() => undefined);
+    if (v) {
+      return v;
+    }
+    await sleep(250);
+  }
+  throw new Error(`не дождались: ${what}`);
+}
+
+function player(page: Page): FrameLocator {
+  return page.frameLocator('iframe.webview.ready').frameLocator('#active-frame');
+}
+
+async function position(page: Page): Promise<string> {
+  return player(page).locator('#pos').innerText();
+}
+
+async function expectSound(label: string, minRms: number) {
+  if (!audioProbeAvailable()) {
+    console.log(`  (звук не проверяется: не задан YM_AUDIO_DEVICE)`);
+    return;
+  }
+  const a = await recordAudio(2000);
+  console.log(`  ${label}: RMS=${a.rms.toFixed(3)} peak=${a.peak.toFixed(3)} f≈${a.zeroCrossHz.toFixed(0)} Гц за ${a.seconds.toFixed(1)}с`);
+  assert.ok(a.rms > minRms, `${label}: тишина (RMS ${a.rms})`);
+  if (!real) {
+    assert.ok(Math.abs(a.zeroCrossHz - 440) < 20, `${label}: ожидали тон 440 Гц, получили ${a.zeroCrossHz}`);
+  }
+}
+
+async function expectSilence(label: string) {
+  if (!audioProbeAvailable()) {
+    return;
+  }
+  const a = await recordAudio(1000);
+  console.log(`  ${label}: RMS=${a.rms.toFixed(4)}`);
+  assert.ok(a.rms < 0.005, `${label}: должна быть тишина, RMS ${a.rms}`);
+}
+
+async function main() {
+  fs.mkdirSync(shots, { recursive: true });
+  const server = real ? undefined : await startMockServer(path.join(root, 'test-fixtures/tone.mp3'));
+  const token = process.env.YM_TOKEN ?? MOCK_TOKEN;
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ym-e2e-'));
+  const userData = path.join(tmp, 'user');
+  fs.mkdirSync(path.join(userData, 'User'), { recursive: true });
+  fs.writeFileSync(
+    path.join(userData, 'User/settings.json'),
+    JSON.stringify({
+      ...(server ? { 'yandexMusic.apiBaseUrl': server.base } : {}),
+      'yandexMusic.volume': 1,
+      'workbench.startupEditor': 'none',
+      'security.workspace.trust.enabled': false,
+      'workbench.tips.enabled': false,
+      'update.mode': 'none',
+      'telemetry.telemetryLevel': 'off',
+      'chat.disableAIFeatures': true,
+      'workbench.secondarySideBar.defaultVisibility': 'hidden',
+    }),
+  );
+  const workspace = path.join(tmp, 'ws');
+  fs.mkdirSync(workspace);
+
+  const vscodePath = await downloadAndUnzipVSCode(process.env.VSCODE_VERSION ?? 'stable');
+  const app = await electron.launch({
+    executablePath: vscodePath,
+    args: [
+      '--no-sandbox',
+      '--disable-gpu',
+      '--disable-gpu-sandbox',
+      '--skip-welcome',
+      '--skip-release-notes',
+      '--disable-workspace-trust',
+      '--password-store=basic', // в контейнере нет системного keyring
+      `--extensionDevelopmentPath=${root}`,
+      `--user-data-dir=${userData}`,
+      `--extensions-dir=${path.join(tmp, 'ext')}`,
+      workspace,
+    ],
+    env: { ...process.env } as Record<string, string>,
+  });
+  const page = await app.firstWindow();
+  page.setDefaultTimeout(30000);
+
+  try {
+    await step('VS Code запустился', async () => {
+      await page.waitForSelector('.monaco-workbench', { timeout: 60000 });
+      await until('статус-бар расширения', async () => (await page.locator('.statusbar-item', { hasText: 'Яндекс Музыка' }).count()) > 0, 60000);
+    });
+
+    await step('вход: палитра команд → «Ввести OAuth-токен вручную»', async () => {
+      await page.keyboard.press('F1');
+      await page.keyboard.type('Яндекс Музыка: Ввести OAuth');
+      await page.screenshot({ path: path.join(shots, '0-palette.png') });
+      await page.locator('.quick-input-list .monaco-list-row', { hasText: 'Ввести OAuth-токен' }).first().click();
+      await page.locator('.quick-input-box input').fill(token);
+      await page.screenshot({ path: path.join(shots, '0-token.png') });
+      await page.keyboard.press('Enter');
+      await page.locator('.activitybar [aria-label="Яндекс Музыка"]').first().click();
+      await player(page).locator('.account', { hasText: '👤' }).waitFor({ timeout: 30000 });
+      console.log(`(${await player(page).locator('.account').innerText()})`);
+    });
+
+    await step('горячая клавиша Ctrl+Alt+P → включается «Моя волна»', async () => {
+      await page.locator('.monaco-workbench .part.editor').click({ position: { x: 300, y: 200 } });
+      await page.keyboard.press('Control+Alt+P');
+      // Нажатие клавиши в окне VS Code — жест пользователя, обычно этого достаточно.
+      // Если webview всё же заблокировал автозапуск, панель покажет «▶ Включить звук».
+      const how = await until('воспроизведения или запроса клика', async () => {
+        if (await player(page).locator('#gesture').isVisible()) {
+          return 'gesture';
+        }
+        return (await position(page)) !== '0:00' && 'playing';
+      });
+      if (how === 'gesture') {
+        await page.screenshot({ path: path.join(shots, '1-needs-click.png') });
+        await expectSilence('до клика');
+        await player(page).locator('#gesture').click();
+        await until('роста позиции', async () => (await position(page)) !== '0:00');
+      }
+      console.log(`(${how === 'gesture' ? 'понадобился клик «Включить звук»' : 'заиграло сразу'})`);
+    });
+    await expectSound('играет трек', real ? 0.01 : 0.1);
+    await page.screenshot({ path: path.join(shots, '2-playing.png') });
+
+    await step('Ctrl+Alt+P → пауза', async () => {
+      await page.locator('.monaco-workbench .part.editor').click({ position: { x: 300, y: 200 } });
+      await page.keyboard.press('Control+Alt+P');
+      await player(page).locator('#play', { hasText: '▶' }).waitFor();
+    });
+    await sleep(300);
+    await expectSilence('на паузе');
+
+    await step('кнопка ▶ в панели → продолжает', async () => {
+      await player(page).locator('#play').click();
+      await player(page).locator('#play', { hasText: '⏸' }).waitFor();
+    });
+    await expectSound('после паузы', real ? 0.01 : 0.1);
+
+    if (!real) {
+      await step('вкладка «Поиск»: ищем и кликаем по 3-му треку', async () => {
+        await player(page).locator('[data-tab="search"]').click();
+        await player(page).locator('#q').fill('Тестовый');
+        await player(page).locator('#searchForm button').click();
+        await player(page).locator('#results li').nth(2).click();
+        await player(page).locator('.now .title', { hasText: 'Тестовый трек 3' }).waitFor();
+        await until('статус-бара с треком 3', async () => (await page.locator('.statusbar-item', { hasText: 'Тестовый трек 3' }).count()) > 0);
+      });
+      await expectSound('трек из поиска', 0.1);
+
+      await step('♡ → лайк уходит в API', async () => {
+        await player(page).locator('.like').click();
+        await player(page).locator('.like.on').waitFor();
+        assert.ok(server!.liked.has(1003));
+      });
+
+      await step('Ctrl+Alt+→ → следующий трек', async () => {
+        await page.locator('.monaco-workbench .part.editor').click({ position: { x: 300, y: 200 } });
+        await page.keyboard.press('Control+Alt+ArrowRight');
+        await player(page).locator('.now .title', { hasText: 'Тестовый трек 4' }).waitFor();
+        await until('воспроизведения', async () => (await position(page)) !== '0:00');
+      });
+      await expectSound('следующий трек', 0.1);
+      await page.screenshot({ path: path.join(shots, '3-search-like.png') });
+
+      await step('трек доигрывает до конца → автоматически следующий', async () => {
+        await player(page).locator('.now .title', { hasText: 'Тестовый трек 5' }).waitFor({ timeout: 20000 });
+      });
+
+      const sb = (id: string) => page.locator(`[id="entropious.vscode-yandex-music.yandexMusic.${id}"]`);
+
+      await step('статус-бар: кнопка ⏸ ставит паузу', async () => {
+        await sb('play').click();
+        await player(page).locator('#play', { hasText: '▶' }).waitFor();
+      });
+      await sleep(300);
+      await expectSilence('пауза из статус-бара');
+
+      await step('статус-бар: наведение на трек показывает карточку с кнопками', async () => {
+        await sb('track').hover();
+        await page.locator('.monaco-hover', { hasText: 'Тестовый трек 5' }).waitFor();
+        await page.screenshot({ path: path.join(shots, '4-statusbar-hover.png') });
+        await page.locator('.monaco-hover a[href*="yandexMusic.playPause"], .monaco-hover a[data-href*="yandexMusic.playPause"]').first().click();
+        await player(page).locator('#play', { hasText: '⏸' }).waitFor();
+      });
+      await expectSound('play из всплывающей карточки', 0.1);
+
+      await step('клик по треку в статус-баре → мини-плеер → «Следующий трек»', async () => {
+        await page.mouse.move(700, 500);
+        await sb('track').click();
+        await page.locator('.quick-input-widget .monaco-list-row', { hasText: 'Следующий трек' }).waitFor();
+        await page.screenshot({ path: path.join(shots, '5-quick-panel.png') });
+        const before = await player(page).locator('.now .title').innerText();
+        await page.locator('.quick-input-widget .monaco-list-row', { hasText: 'Следующий трек' }).click();
+        await until('смены трека', async () => (await player(page).locator('.now .title').innerText()) !== before);
+      });
+      await expectSound('после «Следующий трек» из мини-плеера', 0.1);
+
+      await step('мини-плеер: выбор трека из очереди по вводу «трек 2»', async () => {
+        const input = page.locator('.quick-input-widget .quick-input-box input');
+        if (!(await input.isVisible())) {
+          await sb('track').click();
+        }
+        await input.fill('трек 2');
+        await page.keyboard.press('Enter');
+        await player(page).locator('.now .title', { hasText: 'Тестовый трек 2' }).waitFor();
+        await until('статус-бара', async () => (await sb('track').innerText()).includes('Тестовый трек 2'));
+        await page.keyboard.press('Escape');
+      });
+      await expectSound('трек из очереди мини-плеера', 0.1);
+      await page.screenshot({ path: path.join(shots, '6-final.png') });
+    } else {
+      const title = await player(page).locator('.now .title').innerText();
+      const artist = await player(page).locator('.now .artist').innerText();
+      console.log(`  сейчас играет: ${artist} — ${title}`);
+    }
+    console.log('\nE2E: всё прошло');
+  } catch (e) {
+    await page.screenshot({ path: path.join(shots, 'failure.png') }).catch(() => undefined);
+    throw e;
+  } finally {
+    await app.close().catch(() => undefined);
+    await server?.close();
+  }
+}
+
+main().catch((e) => {
+  console.error('\nE2E FAILED:', e);
+  process.exit(1);
+});
