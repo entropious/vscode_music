@@ -104,11 +104,6 @@
     ],
     "keybindings": [
       {
-        "command": "yandexMusic.quickPanel",
-        "key": "ctrl+alt+m",
-        "mac": "cmd+alt+m"
-      },
-      {
         "command": "yandexMusic.playPause",
         "key": "ctrl+alt+p",
         "mac": "cmd+alt+p"

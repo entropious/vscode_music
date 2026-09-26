@@ -11,7 +11,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { _electron as electron, FrameLocator, Page } from 'playwright-core';
-import { downloadAndUnzipVSCode } from '@vscode/test-electron';
+import { vscodeBinary } from './vscodeBinary';
 import { audioProbeAvailable, recordAudio } from './audioProbe';
 import { MOCK_TOKEN, startMockServer } from './mockServer';
 
@@ -19,6 +19,8 @@ const root = path.resolve(__dirname, '../..');
 const shots = path.join(root, 'screenshots');
 const real = !!process.env.YM_TOKEN;
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** Модификатор горячих клавиш расширения: Cmd на macOS, Ctrl на остальных ОС. */
+const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
 
 async function step<T>(name: string, fn: () => Promise<T>): Promise<T> {
   process.stdout.write(`• ${name} … `);
@@ -95,7 +97,10 @@ async function main() {
   const workspace = path.join(tmp, 'ws');
   fs.mkdirSync(workspace);
 
-  const vscodePath = await downloadAndUnzipVSCode(process.env.VSCODE_VERSION ?? 'stable');
+  const vscodePath = await vscodeBinary();
+  // Во встроенном терминале VS Code задана ELECTRON_RUN_AS_NODE: с ней Code стартует как Node.
+  const env = { ...process.env } as Record<string, string>;
+  delete env.ELECTRON_RUN_AS_NODE;
   const app = await electron.launch({
     executablePath: vscodePath,
     args: [
@@ -111,7 +116,7 @@ async function main() {
       `--extensions-dir=${path.join(tmp, 'ext')}`,
       workspace,
     ],
-    env: { ...process.env } as Record<string, string>,
+    env,
   });
   const page = await app.firstWindow();
   page.setDefaultTimeout(30000);
@@ -137,7 +142,7 @@ async function main() {
 
     await step('горячая клавиша Ctrl+Alt+P → включается «Моя волна»', async () => {
       await page.locator('.monaco-workbench .part.editor').click({ position: { x: 300, y: 200 } });
-      await page.keyboard.press('Control+Alt+P');
+      await page.keyboard.press(`${mod}+Alt+P`);
       // Нажатие клавиши в окне VS Code — жест пользователя, обычно этого достаточно.
       // Если webview всё же заблокировал автозапуск, панель покажет «▶ Включить звук».
       const how = await until('воспроизведения или запроса клика', async () => {
@@ -159,7 +164,7 @@ async function main() {
 
     await step('Ctrl+Alt+P → пауза', async () => {
       await page.locator('.monaco-workbench .part.editor').click({ position: { x: 300, y: 200 } });
-      await page.keyboard.press('Control+Alt+P');
+      await page.keyboard.press(`${mod}+Alt+P`);
       await player(page).locator('#play', { hasText: '▶' }).waitFor();
     });
     await sleep(300);
@@ -190,7 +195,7 @@ async function main() {
 
       await step('Ctrl+Alt+→ → следующий трек', async () => {
         await page.locator('.monaco-workbench .part.editor').click({ position: { x: 300, y: 200 } });
-        await page.keyboard.press('Control+Alt+ArrowRight');
+        await page.keyboard.press(`${mod}+Alt+ArrowRight`);
         await player(page).locator('.now .title', { hasText: 'Тестовый трек 4' }).waitFor();
         await until('воспроизведения', async () => (await position(page)) !== '0:00');
       });
@@ -219,29 +224,24 @@ async function main() {
       });
       await expectSound('play из всплывающей карточки', 0.1);
 
-      await step('клик по треку в статус-баре → мини-плеер → «Следующий трек»', async () => {
+      await step('клик по треку в статус-баре → карточка мини-плеера → «Следующий»', async () => {
+        await page.keyboard.press('Escape');
         await page.mouse.move(700, 500);
+        await page.locator('.monaco-hover').first().waitFor({ state: 'hidden' });
         await sb('track').click();
-        await page.locator('.quick-input-widget .monaco-list-row', { hasText: 'Следующий трек' }).waitFor();
-        await page.screenshot({ path: path.join(shots, '5-quick-panel.png') });
+        const card = page.locator('.monaco-hover', { hasText: 'Моя волна' });
+        await card.waitFor({ timeout: 3000 });
+        // Трек играет, позиция обновляется каждую секунду — карточка не должна мигать.
+        for (let i = 0; i < 6; i++) {
+          await sleep(500);
+          assert.ok(await card.isVisible(), `карточка пропала через ${(i + 1) * 0.5} с`);
+        }
+        await page.screenshot({ path: path.join(shots, '5-card-on-click.png') });
         const before = await player(page).locator('.now .title').innerText();
-        await page.locator('.quick-input-widget .monaco-list-row', { hasText: 'Следующий трек' }).click();
+        await card.locator('a[href*="yandexMusic.next"], a[data-href*="yandexMusic.next"]').first().click();
         await until('смены трека', async () => (await player(page).locator('.now .title').innerText()) !== before);
       });
-      await expectSound('после «Следующий трек» из мини-плеера', 0.1);
-
-      await step('мини-плеер: выбор трека из очереди по вводу «трек 2»', async () => {
-        const input = page.locator('.quick-input-widget .quick-input-box input');
-        if (!(await input.isVisible())) {
-          await sb('track').click();
-        }
-        await input.fill('трек 2');
-        await page.keyboard.press('Enter');
-        await player(page).locator('.now .title', { hasText: 'Тестовый трек 2' }).waitFor();
-        await until('статус-бара', async () => (await sb('track').innerText()).includes('Тестовый трек 2'));
-        await page.keyboard.press('Escape');
-      });
-      await expectSound('трек из очереди мини-плеера', 0.1);
+      await expectSound('после «Следующий» из карточки', 0.1);
       await page.screenshot({ path: path.join(shots, '6-final.png') });
     } else {
       const title = await player(page).locator('.now .title').innerText();

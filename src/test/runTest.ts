@@ -1,11 +1,12 @@
 import * as path from 'path';
 import { runTests } from '@vscode/test-electron';
+import { vscodeBinary } from './vscodeBinary';
 
 async function main() {
   const extensionDevelopmentPath = path.resolve(__dirname, '../../');
   const extensionTestsPath = path.resolve(__dirname, './suite/index');
   await runTests({
-    version: process.env.VSCODE_VERSION ?? 'stable',
+    vscodeExecutablePath: await vscodeBinary(),
     extensionDevelopmentPath,
     extensionTestsPath,
     launchArgs: ['--disable-extensions', '--disable-workspace-trust', '--disable-gpu', '--no-sandbox'],

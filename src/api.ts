@@ -174,7 +174,7 @@ export class YandexMusicClient {
   }
 
   /** Возвращает прямую ссылку на MP3-поток трека. */
-  async streamUrl(trackId: string, quality: 'high' | 'low' = 'high'): Promise<{ url: string; preview: boolean }> {
+  async streamUrl(trackId: string, quality: 'high' | 'low' = 'high'): Promise<{ url: string; preview: boolean; codec: string; bitrate: number }> {
     const id = trackId.split(':')[0];
     const infos = await this.request<DownloadInfo[] | { name?: string; message?: string }>(`/tracks/${id}/download-info`);
     if (!Array.isArray(infos)) {
@@ -194,7 +194,7 @@ export class YandexMusicClient {
       throw new ApiError(explainError(res.status, res.statusText), res.status);
     }
     const d = (await res.json()) as { host: string; path: string; ts: string; s: string };
-    return { url: buildDirectLink(d), preview: !!info.preview };
+    return { url: buildDirectLink(d), preview: !!info.preview, codec: info.codec, bitrate: info.bitrateInKbps };
   }
 }
 

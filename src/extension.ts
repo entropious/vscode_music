@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { Track, YandexMusicClient, artistLine, fullTitle } from './api';
 import { Auth } from './auth';
 import { Player } from './player';
-import { showQuickPanel } from './quickPanel';
 
 export interface ExtensionApi {
   player: Player;
@@ -80,7 +79,9 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
         await player.refreshAccount();
       }),
     ),
-    vscode.commands.registerCommand('yandexMusic.quickPanel', () => showQuickPanel(player)),
+    // Клик по элементу статус-бара оставляет на нём фокус, а showHover показывает
+    // tooltip элемента в фокусе, то есть карточку мини-плеера.
+    vscode.commands.registerCommand('yandexMusic.showCard', () => vscode.commands.executeCommand('workbench.action.showHover')),
     vscode.commands.registerCommand('yandexMusic.playPause', guard(() => player.playPause())),
     vscode.commands.registerCommand('yandexMusic.next', guard(() => player.next())),
     vscode.commands.registerCommand('yandexMusic.previous', guard(() => player.previous())),

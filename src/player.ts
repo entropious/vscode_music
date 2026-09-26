@@ -13,6 +13,19 @@ export interface PlaybackStatus {
   needsGesture?: boolean;
 }
 
+const CARD_COMMANDS = [
+  'yandexMusic.previous',
+  'yandexMusic.playPause',
+  'yandexMusic.next',
+  'yandexMusic.like',
+  'yandexMusic.playMyWave',
+  'yandexMusic.playLiked',
+  'yandexMusic.playPlaylist',
+  'yandexMusic.search',
+  'yandexMusic.signIn',
+  'yandexMusic.player.focus',
+];
+
 interface ViewTrack {
   id: string;
   title: string;
@@ -43,6 +56,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   private loadingMore = false;
   private lastError?: string;
   private gestureHintShown = false;
+  /** Кодек и битрейт текущего потока, например «MP3 320 кбит/с». */
+  private streamInfo?: string;
+  private lastTooltip?: string;
 
   private readonly prevItem: vscode.StatusBarItem;
   private readonly playItem: vscode.StatusBarItem;
@@ -68,7 +84,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     this.prevItem = item('prev', 53, 'yandexMusic.previous', '$(chevron-left)', 'Предыдущий трек');
     this.playItem = item('play', 52, 'yandexMusic.playPause', '$(play)', 'Play / Pause');
     this.nextItem = item('next', 51, 'yandexMusic.next', '$(chevron-right)', 'Следующий трек');
-    this.statusItem = item('track', 50, 'yandexMusic.quickPanel', '$(music) Яндекс Музыка', 'Яндекс Музыка');
+    this.statusItem = item('track', 50, 'yandexMusic.showCard', '$(music) Яндекс Музыка', 'Яндекс Музыка');
     this.updateStatusBar();
     this.statusItem.show();
   }
@@ -248,6 +264,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     if (!client.authorized) {
       this.account = undefined;
       this.pushState();
+      this.updateStatusBar();
       return undefined;
     }
     try {
@@ -260,6 +277,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       this.lastError = errorText(e);
     }
     this.pushState();
+    this.updateStatusBar();
     return this.account;
   }
 
@@ -352,16 +370,18 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     await this.ensureView();
     this.index = index;
     this.lastError = undefined;
+    this.streamInfo = undefined;
     this.status = { playing: false, position: 0, duration: 0, trackId: track.id };
     this.pushState();
     this.updateStatusBar('$(loading~spin)');
 
     const client = await this.clientFactory();
     const quality = vscode.workspace.getConfiguration('yandexMusic').get<'high' | 'low'>('quality', 'high');
-    const { url, preview } = await client.streamUrl(track.id, quality);
+    const { url, preview, codec, bitrate } = await client.streamUrl(track.id, quality);
     if (this.current() !== track) {
       return; // пользователь уже переключил трек
     }
+    this.streamInfo = `${codec.toUpperCase()} ${bitrate} кбит/с${preview ? ', фрагмент 30 с' : ''}`;
     if (preview) {
       vscode.window.setStatusBarMessage('Яндекс Музыка: без Плюса доступен только 30-секундный фрагмент', 5000);
     }
@@ -437,59 +457,69 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
 
   private updateStatusBar(icon?: string): void {
     const t = this.current();
+    let text = '$(music) Яндекс Музыка';
     if (!t) {
-      this.statusItem.text = '$(music) Яндекс Музыка';
-      this.statusItem.tooltip = 'Яндекс Музыка — открыть мини-плеер';
       [this.prevItem, this.playItem, this.nextItem].forEach((i) => i.hide());
-      this.changed.fire();
-      return;
+    } else {
+      this.playItem.text = icon ?? (this.status.playing ? '$(debug-pause)' : '$(play)');
+      this.playItem.tooltip = this.status.playing ? 'Пауза' : 'Играть';
+      const label = `${artistLine(t)} — ${fullTitle(t)}`;
+      const liked = this.liked.has(baseId(t.id));
+      text = `${liked ? '$(heart-filled)' : '$(music)'} ${label.length > 45 ? label.slice(0, 44) + '…' : label}`;
+      [this.prevItem, this.playItem, this.nextItem].forEach((i) => i.show());
     }
-    this.playItem.text = icon ?? (this.status.playing ? '$(debug-pause)' : '$(play)');
-    this.playItem.tooltip = this.status.playing ? 'Пауза' : 'Играть';
-    const label = `${artistLine(t)} — ${fullTitle(t)}`;
-    const liked = this.liked.has(baseId(t.id));
-    this.statusItem.text = `${liked ? '$(heart-filled)' : '$(music)'} ${label.length > 45 ? label.slice(0, 44) + '…' : label}`;
-    this.statusItem.tooltip = this.hoverCard(t, liked);
-    [this.prevItem, this.playItem, this.nextItem].forEach((i) => i.show());
+    // Любое присваивание свойству элемента отправляет в VS Code и markdown-tooltip,
+    // а он при этом пересоздаёт открытую карточку. Поэтому элемент трека
+    // обновляется только когда его текст или карточка действительно изменились.
+    const card = this.hoverCard(t);
+    if (text !== this.statusItem.text) {
+      this.statusItem.text = text;
+    }
+    if (card.value !== this.lastTooltip) {
+      this.lastTooltip = card.value;
+      this.statusItem.tooltip = card;
+    }
     this.changed.fire();
   }
 
-  /** Всплывающая карточка при наведении на трек в статус-баре — с кликабельными кнопками. */
-  private hoverCard(t: Track, liked: boolean): vscode.MarkdownString {
+  /** Мини-плеер: карточка трека в статус-баре, показывается при наведении и по клику. */
+  private hoverCard(t: Track | undefined): vscode.MarkdownString {
     const md = new vscode.MarkdownString(undefined, true);
-    md.isTrusted = { enabledCommands: ['yandexMusic.previous', 'yandexMusic.playPause', 'yandexMusic.next', 'yandexMusic.like', 'yandexMusic.quickPanel', 'yandexMusic.playMyWave'] };
+    md.isTrusted = { enabledCommands: CARD_COMMANDS };
     md.supportHtml = true;
-    const cover = coverUrl(t.coverUri, 100);
-    if (cover) {
-      md.appendMarkdown(`<img src="${cover}" width="64" height="64"/>\n\n`);
+    if (t) {
+      const liked = this.liked.has(baseId(t.id));
+      const cover = coverUrl(t.coverUri, 100);
+      if (cover) {
+        md.appendMarkdown(`<img src="${cover}" width="64" height="64"/>\n\n`);
+      }
+      md.appendMarkdown(`**${escapeMd(fullTitle(t))}**  \n${escapeMd(artistLine(t))}  \n`);
+      const details = [this.sourceLabel(), fmtTime((t.durationMs ?? 0) / 1000), this.streamInfo].filter(Boolean).map((s) => escapeMd(s!));
+      md.appendMarkdown(`*${details.join(' · ')}*\n\n`);
+      // В заголовке ссылки и иконки крупнее: инлайн-стили размера hover не пропускает.
+      md.appendMarkdown(
+        '# ' +
+        [
+          `[$(chevron-left)](command:yandexMusic.previous "Предыдущий")`,
+          this.status.playing ? `[$(debug-pause)](command:yandexMusic.playPause "Пауза")` : `[$(play)](command:yandexMusic.playPause "Играть")`,
+          `[$(chevron-right)](command:yandexMusic.next "Следующий")`,
+          liked ? `[$(heart-filled)](command:yandexMusic.like "Убрать из «Мне нравится»")` : `[$(heart)](command:yandexMusic.like "Нравится")`,
+        ].join('&nbsp;&nbsp;&nbsp;') + '\n\n',
+      );
+    } else {
+      md.appendMarkdown('**Яндекс Музыка**\n\n');
     }
-    md.appendMarkdown(`**${escapeMd(fullTitle(t))}**  \n${escapeMd(artistLine(t))}  \n`);
-    const pos = `${fmtTime(this.status.position)} / ${fmtTime(this.status.duration || (t.durationMs ?? 0) / 1000)}`;
-    md.appendMarkdown(`*${escapeMd(this.sourceLabel())}* · ${pos}\n\n`);
-    md.appendMarkdown(
-      [
-        `[$(chevron-left)](command:yandexMusic.previous "Предыдущий")`,
-        this.status.playing ? `[$(debug-pause)](command:yandexMusic.playPause "Пауза")` : `[$(play)](command:yandexMusic.playPause "Играть")`,
-        `[$(chevron-right)](command:yandexMusic.next "Следующий")`,
-        liked ? `[$(heart-filled)](command:yandexMusic.like "Убрать из «Мне нравится»")` : `[$(heart)](command:yandexMusic.like "Нравится")`,
-        `[$(list-unordered) Мини-плеер](command:yandexMusic.quickPanel "Очередь, волна, плейлисты, поиск")`,
-      ].join('&nbsp;&nbsp;&nbsp;'),
-    );
+    md.appendMarkdown('---\n\n');
+    const links = this.account
+      ? [
+          `[$(pulse) Моя волна](command:yandexMusic.playMyWave)`,
+          `[$(heart-filled) Мне нравится](command:yandexMusic.playLiked)`,
+          `[$(list-unordered) Плейлист…](command:yandexMusic.playPlaylist)`,
+        ]
+      : [`[$(account) Войти](command:yandexMusic.signIn)`];
+    links.push(`[$(search) Поиск…](command:yandexMusic.search)`, `[$(layout-sidebar-left) Панель](command:yandexMusic.player.focus "Очередь, плейлисты, громкость")`);
+    md.appendMarkdown(links.join('&nbsp;&nbsp;·&nbsp;&nbsp;'));
     return md;
-  }
-
-  /** Снимок состояния для мини-плеера. */
-  snapshot() {
-    const t = this.current();
-    return {
-      queue: this.queue,
-      index: this.index,
-      current: t,
-      liked: t ? this.liked.has(baseId(t.id)) : false,
-      status: this.status,
-      source: this.sourceLabel(),
-      account: this.account,
-    };
   }
 
   showError(e: unknown): void {
