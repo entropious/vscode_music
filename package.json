@@ -103,7 +103,11 @@
       }
     ],
     "keybindings": [
-      { "command": "yandexMusic.quickPanel", "key": "ctrl+alt+m", "mac": "cmd+alt+m" },
+      {
+        "command": "yandexMusic.quickPanel",
+        "key": "ctrl+alt+m",
+        "mac": "cmd+alt+m"
+      },
       {
         "command": "yandexMusic.playPause",
         "key": "ctrl+alt+p",
@@ -164,6 +168,7 @@
     "@types/node": "^20.11.0",
     "@types/vscode": "~1.85.0",
     "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^4.0.0",
     "mocha": "^10.4.0",
     "playwright-core": "^1.56.1",
     "typescript": "^5.4.0"

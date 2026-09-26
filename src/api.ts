@@ -176,7 +176,11 @@ export class YandexMusicClient {
   /** Возвращает прямую ссылку на MP3-поток трека. */
   async streamUrl(trackId: string, quality: 'high' | 'low' = 'high'): Promise<{ url: string; preview: boolean }> {
     const id = trackId.split(':')[0];
-    const infos = await this.request<DownloadInfo[]>(`/tracks/${id}/download-info`);
+    const infos = await this.request<DownloadInfo[] | { name?: string; message?: string }>(`/tracks/${id}/download-info`);
+    if (!Array.isArray(infos)) {
+      const reason = infos?.message === 'no-rights' ? 'нет прав на прослушивание (нужен вход в аккаунт или подписка Плюс)' : infos?.message ?? 'неизвестная ошибка';
+      throw new ApiError(`Трек недоступен: ${reason}`, 403, infos);
+    }
     const mp3 = infos.filter((i) => i.codec === 'mp3');
     const pool = mp3.length ? mp3 : infos;
     if (!pool.length) {
