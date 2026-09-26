@@ -1,0 +1,171 @@
+{
+  "name": "vscode-yandex-music",
+  "displayName": "Yandex Music Player",
+  "description": "Слушайте Яндекс Музыку прямо в VS Code: Моя волна, «Мне нравится», плейлисты и поиск.",
+  "version": "0.1.0",
+  "publisher": "entropious",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/entropious/vscode_music"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "music",
+    "yandex",
+    "яндекс музыка",
+    "player"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yandexMusic",
+          "title": "Яндекс Музыка",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "yandexMusic": [
+        {
+          "type": "webview",
+          "id": "yandexMusic.player",
+          "name": "Плеер"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "yandexMusic.signIn",
+        "title": "Войти в аккаунт",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.setToken",
+        "title": "Ввести OAuth-токен вручную",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.signOut",
+        "title": "Выйти из аккаунта",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.playPause",
+        "title": "Play / Pause",
+        "category": "Яндекс Музыка",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "yandexMusic.next",
+        "title": "Следующий трек",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.previous",
+        "title": "Предыдущий трек",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.like",
+        "title": "Нравится / Не нравится",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.search",
+        "title": "Найти и включить трек",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.playMyWave",
+        "title": "Включить «Мою волну»",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.playLiked",
+        "title": "Включить «Мне нравится»",
+        "category": "Яндекс Музыка"
+      },
+      {
+        "command": "yandexMusic.playPlaylist",
+        "title": "Включить плейлист…",
+        "category": "Яндекс Музыка"
+      }
+    ],
+    "keybindings": [
+      { "command": "yandexMusic.quickPanel", "key": "ctrl+alt+m", "mac": "cmd+alt+m" },
+      {
+        "command": "yandexMusic.playPause",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
+      },
+      {
+        "command": "yandexMusic.next",
+        "key": "ctrl+alt+right",
+        "mac": "cmd+alt+right"
+      },
+      {
+        "command": "yandexMusic.previous",
+        "key": "ctrl+alt+left",
+        "mac": "cmd+alt+left"
+      }
+    ],
+    "configuration": {
+      "title": "Яндекс Музыка",
+      "properties": {
+        "yandexMusic.quality": {
+          "type": "string",
+          "enum": [
+            "high",
+            "low"
+          ],
+          "default": "high",
+          "description": "Качество потока: high — максимальный доступный битрейт MP3, low — минимальный."
+        },
+        "yandexMusic.volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.7,
+          "description": "Громкость по умолчанию (0–1)."
+        },
+        "yandexMusic.apiBaseUrl": {
+          "type": "string",
+          "default": "https://api.music.yandex.net",
+          "description": "Адрес API Яндекс Музыки (менять только для отладки)."
+        },
+        "yandexMusic.oauthBaseUrl": {
+          "type": "string",
+          "default": "https://oauth.yandex.ru",
+          "description": "Адрес сервера OAuth Яндекса (менять только для отладки)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node ./out/test/runTest.js",
+    "e2e": "npm run compile && node ./out/test/e2e.js",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/test-electron": "^2.4.1",
+    "mocha": "^10.4.0",
+    "playwright-core": "^1.56.1",
+    "typescript": "^5.4.0"
+  }
+}

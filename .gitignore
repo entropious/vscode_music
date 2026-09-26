@@ -1,0 +1,6 @@
+node_modules/
+out/
+.vscode-test/
+*.vsix
+screenshots/failure.png
+screenshots/0-*.png
