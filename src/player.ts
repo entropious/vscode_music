@@ -83,10 +83,12 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       i.tooltip = tooltip;
       return i;
     };
-    this.prevItem = item('prev', 53, 'yandexMusic.previous', '$(chevron-left)', 'Предыдущий трек');
-    this.playItem = item('play', 52, 'yandexMusic.playPause', '$(play)', 'Play / Pause');
-    this.nextItem = item('next', 51, 'yandexMusic.next', '$(chevron-right)', 'Следующий трек');
-    this.statusItem = item('track', 50, 'yandexMusic.showCard', '$(music) Яндекс Музыка', 'Яндекс Музыка');
+    // Встроенный «Problems» стоит слева с приоритетом 50, поэтому элементы плеера
+    // занимают узкий дробный диапазон чуть выше, чтобы между ними ничего не вставало.
+    this.prevItem = item('prev', 50.04, 'yandexMusic.previous', '$(chevron-left)', 'Предыдущий трек');
+    this.playItem = item('play', 50.03, 'yandexMusic.playPause', '$(play)', 'Play / Pause');
+    this.nextItem = item('next', 50.02, 'yandexMusic.next', '$(chevron-right)', 'Следующий трек');
+    this.statusItem = item('track', 50.01, 'yandexMusic.showCard', '$(music) Яндекс Музыка', 'Яндекс Музыка');
     this.updateStatusBar();
     this.statusItem.show();
   }
