@@ -10,8 +10,8 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
-import { _electron as electron, FrameLocator, Page } from 'playwright-core';
-import { vscodeBinary } from './vscodeBinary';
+import { chromium, FrameLocator, Page } from 'playwright-core';
+import { freePort, launchVSCode, vscodeBinary } from './vscodeBinary';
 import { audioProbeAvailable, recordAudio } from './audioProbe';
 import { MOCK_TOKEN, startMockServer } from './mockServer';
 
@@ -97,13 +97,11 @@ async function main() {
   const workspace = path.join(tmp, 'ws');
   fs.mkdirSync(workspace);
 
-  const vscodePath = await vscodeBinary();
-  // Во встроенном терминале VS Code задана ELECTRON_RUN_AS_NODE: с ней Code стартует как Node.
-  const env = { ...process.env } as Record<string, string>;
-  delete env.ELECTRON_RUN_AS_NODE;
-  const app = await electron.launch({
-    executablePath: vscodePath,
-    args: [
+  const cdpPort = await freePort();
+  const proc = launchVSCode(
+    await vscodeBinary(),
+    [
+      `--remote-debugging-port=${cdpPort}`,
       '--no-sandbox',
       '--disable-gpu',
       '--disable-gpu-sandbox',
@@ -116,10 +114,23 @@ async function main() {
       `--extensions-dir=${path.join(tmp, 'ext')}`,
       workspace,
     ],
-    env,
-  });
-  const page = await app.firstWindow();
+    { log: path.join(tmp, 'vscode.log') },
+  );
+  // Playwright подключается к уже запущенному VS Code: так на macOS его окна не выходят на передний план.
+  const browser = await until('DevTools-порта VS Code', () => chromium.connectOverCDP(`http://127.0.0.1:${cdpPort}`), 60000);
+  const context = browser.contexts()[0];
+  const workbench = (p: Page) => p.url().includes('workbench');
+  const page = await until('окна VS Code', async () => context.pages().find(workbench), 60000);
   page.setDefaultTimeout(30000);
+  const nextWindow = async () => {
+    const known = new Set(context.pages());
+    return until('нового окна VS Code', async () => context.pages().find((p) => workbench(p) && !known.has(p)), 60000);
+  };
+  const quit = async () => {
+    const cdp = await browser.newBrowserCDPSession().catch(() => undefined);
+    await cdp?.send('Browser.close').catch(() => undefined);
+    await new Promise((r) => (proc.exitCode !== null ? r(undefined) : proc.once('exit', r)));
+  };
 
   try {
     await step('VS Code запустился', async () => {
@@ -243,6 +254,50 @@ async function main() {
       });
       await expectSound('после «Следующий» из карточки', 0.1);
       await page.screenshot({ path: path.join(shots, '6-final.png') });
+
+      const sbIn = (p: Page, id: string) => p.locator(`[id="entropious.vscode-yandex-music.yandexMusic.${id}"]`);
+      let second!: Page;
+
+      await step('второе окно — пульт: показывает трек, который играет в первом', async () => {
+        await page.keyboard.press('Escape');
+        const opened = nextWindow();
+        await page.keyboard.press(`${mod}+Shift+N`);
+        second = await opened;
+        second.setDefaultTimeout(30000);
+        await second.waitForSelector('.monaco-workbench', { timeout: 60000 });
+        const title = await sb('track').innerText();
+        await until('трека первого окна во втором', async () => (await sbIn(second, 'track').innerText()) === title, 30000);
+        await second.screenshot({ path: path.join(shots, '7-second-window.png') });
+      });
+
+      await step('«Следующий» во втором окне переключает трек в первом', async () => {
+        const before = await player(page).locator('.now .title').innerText();
+        await sbIn(second, 'next').click();
+        await until('смены трека в первом окне', async () => (await player(page).locator('.now .title').innerText()) !== before);
+        await until('воспроизведения в первом окне', async () => (await position(page)) !== '0:00');
+        const now = await sb('track').innerText();
+        await until('того же трека во втором окне', async () => (await sbIn(second, 'track').innerText()) === now);
+      });
+      await expectSound('трек, переключённый из второго окна', 0.1);
+
+      await step('первое окно закрыто → второе становится ведущим и продолжает', async () => {
+        const title = await sbIn(second, 'track').innerText();
+        await page.keyboard.press(`${mod}+Shift+W`);
+        const how = await until('воспроизведения или запроса клика во втором окне', async () => {
+          if (await player(second).locator('#gesture').isVisible()) {
+            return 'gesture';
+          }
+          return (await position(second)) !== '0:00' && 'playing';
+        });
+        if (how === 'gesture') {
+          await player(second).locator('#gesture').click();
+          await until('роста позиции', async () => (await position(second)) !== '0:00');
+        }
+        assert.strictEqual(await sbIn(second, 'track').innerText(), title);
+        console.log(`(${how === 'gesture' ? 'понадобился клик «Включить звук»' : 'заиграло сразу'})`);
+        await second.screenshot({ path: path.join(shots, '8-takeover.png') });
+      });
+      await expectSound('второе окно после закрытия первого', 0.1);
     } else {
       const title = await player(page).locator('.now .title').innerText();
       const artist = await player(page).locator('.now .artist').innerText();
@@ -253,7 +308,7 @@ async function main() {
     await page.screenshot({ path: path.join(shots, 'failure.png') }).catch(() => undefined);
     throw e;
   } finally {
-    await app.close().catch(() => undefined);
+    await quit();
     await server?.close();
   }
 }

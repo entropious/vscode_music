@@ -2,10 +2,12 @@ import * as vscode from 'vscode';
 import { Track, YandexMusicClient, artistLine, fullTitle } from './api';
 import { Auth } from './auth';
 import { Player } from './player';
+import { PlayerSync, socketPathFor } from './sync';
 
 export interface ExtensionApi {
   player: Player;
   auth: Auth;
+  sync: PlayerSync;
 }
 
 export function activate(context: vscode.ExtensionContext): ExtensionApi {
@@ -14,6 +16,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const clientFactory = async () => new YandexMusicClient(config().get<string>('apiBaseUrl', 'https://api.music.yandex.net'), await auth.getToken());
 
   const player = new Player(context.extensionUri, clientFactory);
+  const sync = new PlayerSync(player, socketPathFor(context.globalStorageUri.fsPath));
 
   const guard =
     <A extends unknown[]>(fn: (...args: A) => Promise<unknown>) =>
@@ -130,9 +133,13 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     vscode.commands.registerCommand('yandexMusic.getStatus', () => player.getStatus()),
   );
 
-  void player.preloadWave().catch(() => undefined);
+  context.subscriptions.push(sync);
+  void sync
+    .start()
+    .then(() => player.preloadWave())
+    .catch(() => undefined);
 
-  return { player, auth };
+  return { player, auth, sync };
 }
 
 export function deactivate(): void {}

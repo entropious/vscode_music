@@ -23,6 +23,11 @@
   };
   const cmd = (command, ...args) => vscode.postMessage({ type: 'command', command, args });
 
+  // В окне-пульте звук играет в другом окне: воспроизведение показываем по присланному статусу.
+  const isPlaying = () => (state.remote ? !!(state.status && state.status.playing) : !audio.paused);
+  const position = () => (state.remote ? (state.status && state.status.position) || 0 : audio.currentTime);
+  const duration = () => (state.remote ? (state.status && state.status.duration) || 0 : audio.duration);
+
   function reportStatus() {
     vscode.postMessage({ type: 'status', playing: !audio.paused && !audio.ended, position: audio.currentTime, duration: audio.duration || 0, trackId: currentTrackId, needsGesture });
   }
@@ -68,10 +73,10 @@
       ${now}
       <div class="controls">
         <button data-cmd="yandexMusic.previous" title="Предыдущий">⏮</button>
-        <button class="play" id="play" title="Play/Pause">${!audio.paused ? '⏸' : '▶'}</button>
+        <button class="play" id="play" title="Play/Pause">${isPlaying() ? '⏸' : '▶'}</button>
         <button data-cmd="yandexMusic.next" title="Следующий">⏭</button>
       </div>
-      <div class="seek"><span id="pos">${fmt(audio.currentTime)}</span><input id="seek" type="range" min="0" max="1000" value="0"><span id="dur">${fmt(audio.duration)}</span></div>
+      <div class="seek"><span id="pos">${fmt(position())}</span><input id="seek" type="range" min="0" max="1000" value="0"><span id="dur">${fmt(duration())}</span></div>
       <div class="vol">🔈<input id="vol" type="range" min="0" max="100" value="${Math.round(audio.volume * 100)}"></div>
       ${s.error ? `<div class="error">${esc(s.error)}</div>` : ''}
       <div class="tabs">
@@ -90,15 +95,16 @@
     const dur = document.getElementById('dur');
     const seek = /** @type {HTMLInputElement|null} */ (document.getElementById('seek'));
     const play = document.getElementById('play');
-    if (pos) pos.textContent = fmt(audio.currentTime);
-    if (dur) dur.textContent = fmt(audio.duration);
-    if (seek && !seeking) seek.value = String(audio.duration ? Math.round((audio.currentTime / audio.duration) * 1000) : 0);
-    if (play) play.textContent = !audio.paused ? '⏸' : '▶';
+    if (pos) pos.textContent = fmt(position());
+    if (dur) dur.textContent = fmt(duration());
+    if (seek && !seeking) seek.value = String(duration() ? Math.round((position() / duration()) * 1000) : 0);
+    if (play) play.textContent = isPlaying() ? '⏸' : '▶';
   }
 
   async function tryPlay() {
     try {
       await audio.play();
+      reportUnlocked(true);
       if (needsGesture) {
         needsGesture = false;
         render();
@@ -115,10 +121,21 @@
     }
   }
 
+  // Звук разрешён, только если пользователь нажимал что-то внутри этой панели.
+  let unlockReported = false;
+  /** @param {boolean} [played] звук уже успешно запустился */
+  function reportUnlocked(played) {
+    if (unlockReported || !(played || (navigator.userActivation && navigator.userActivation.hasBeenActive))) return;
+    unlockReported = true;
+    vscode.postMessage({ type: 'audioUnlocked' });
+  }
+
   // Любой клик по панели — жест пользователя: запускаем отложенное воспроизведение.
   document.addEventListener('click', () => {
+    reportUnlocked(false);
     if (needsGesture && audio.src) tryPlay();
   }, true);
+  document.addEventListener('keydown', () => reportUnlocked(false), true);
 
   // ------------------------------------------------------------------ events
   app.addEventListener('click', (ev) => {
@@ -126,7 +143,8 @@
     if (!el || el.id === 'gesture') return;
     if (el.id === 'play') {
       if (needsGesture) return; // уже запускается обработчиком жеста
-      if (audio.src) audio.paused ? tryPlay() : audio.pause();
+      if (state.remote) cmd('yandexMusic.playPause');
+      else if (audio.src) audio.paused ? tryPlay() : audio.pause();
       else cmd('yandexMusic.playPause');
     } else if (el.id === 'loadPlaylists') {
       vscode.postMessage({ type: 'loadPlaylists' });
@@ -166,7 +184,9 @@
   app.addEventListener('change', (ev) => {
     const t = /** @type {HTMLInputElement} */ (ev.target);
     if (t.id === 'seek') {
-      if (audio.duration) audio.currentTime = (Number(t.value) / 1000) * audio.duration;
+      const to = (Number(t.value) / 1000) * duration();
+      if (state.remote) vscode.postMessage({ type: 'seekTo', value: to });
+      else if (audio.duration) audio.currentTime = to;
       seeking = false;
     }
     if (t.id === 'vol') vscode.postMessage({ type: 'volume', value: audio.volume });
@@ -222,8 +242,12 @@
       case 'load':
         currentTrackId = m.trackId;
         audio.src = m.url;
-        audio.currentTime = 0;
+        audio.currentTime = m.position || 0;
         if (m.autoplay) tryPlay();
+        break;
+      case 'progress':
+        state.status = m.status;
+        updateProgress();
         break;
       case 'toggle':
         if (!audio.src) return;

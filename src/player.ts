@@ -13,6 +13,42 @@ export interface PlaybackStatus {
   needsGesture?: boolean;
 }
 
+/** Методы плеера, которые окно-пульт выполняет в ведущем окне. */
+export const REMOTE_METHODS = [
+  'playSource',
+  'playTracks',
+  'playIndex',
+  'playPause',
+  'next',
+  'previous',
+  'toggleLike',
+  'seek',
+  'search',
+  'loadPlaylists',
+  'refreshAccount',
+] as const;
+export type RemoteMethod = (typeof REMOTE_METHODS)[number];
+
+/** Связь окна-пульта с ведущим окном, в котором играет звук. */
+export interface RemoteLink {
+  call(method: RemoteMethod, args: unknown[]): Promise<any>;
+}
+
+/** Всё, что окно-пульт показывает вслед за ведущим, кроме статуса воспроизведения. */
+export interface SharedState {
+  queue: Track[];
+  index: number;
+  source?: Source;
+  liked: string[];
+  playlists: Playlist[];
+  searchResults: Track[];
+  account?: Account;
+  lastError?: string;
+  streamInfo?: string;
+  /** В панели ведущего окна звук разрешён. */
+  audioUnlocked: boolean;
+}
+
 const CARD_COMMANDS = [
   'yandexMusic.previous',
   'yandexMusic.playPause',
@@ -61,6 +97,14 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   private lastTooltip?: string;
   /** Трек, чей поток отдан в webview; у предзагруженной волны его ещё нет. */
   private loadedTrackId?: string;
+  /** Задана, пока окно — пульт: команды уходят ведущему окну. */
+  private remote?: RemoteLink;
+  /**
+   * Webview даёт играть звуку только после нажатия внутри панели этого окна;
+   * клики по статус-бару или карточке не в счёт.
+   */
+  private unlocked = false;
+  private leaderUnlocked = false;
 
   private readonly prevItem: vscode.StatusBarItem;
   private readonly playItem: vscode.StatusBarItem;
@@ -91,6 +135,13 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     this.statusItem = item('track', 50.01, 'yandexMusic.showCard', '$(music) Яндекс Музыка', 'Яндекс Музыка');
     this.updateStatusBar();
     this.statusItem.show();
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('yandexMusic.volume')) {
+          this.post({ type: 'volume', value: vscode.workspace.getConfiguration('yandexMusic').get<number>('volume', 0.7) });
+        }
+      }),
+    );
   }
 
   dispose(): void {
@@ -112,6 +163,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
         this.view = undefined;
         this.viewReady = undefined;
         this.loadedTrackId = undefined;
+        this.unlocked = false;
         this.status = { ...this.status, playing: false };
         this.updateStatusBar();
       }),
@@ -195,6 +247,10 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
         case 'volume':
           await vscode.workspace.getConfiguration('yandexMusic').update('volume', m.value, vscode.ConfigurationTarget.Global);
           break;
+        case 'audioUnlocked':
+          this.unlocked = true;
+          this.changed.fire();
+          break;
         case 'command':
           await vscode.commands.executeCommand(m.command, ...(m.args ?? []));
           break;
@@ -202,9 +258,10 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
           await this.playIndex(m.index);
           break;
         case 'playSearchResult':
-          this.source = { kind: 'search', query: m.query };
-          this.queue = [...this.searchResults];
-          await this.playIndex(m.index);
+          await this.playTracks([...this.searchResults], m.index, { kind: 'search', query: m.query });
+          break;
+        case 'seekTo':
+          await this.seek(m.value);
           break;
         case 'search':
           await this.search(m.query);
@@ -238,7 +295,92 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       playlists: this.playlists.map((p) => ({ id: `${p.uid}:${p.kind}`, title: p.title, count: p.trackCount })),
       searchResults: this.searchResults.map((t) => this.viewTrack(t)),
       error: this.lastError ?? null,
+      remote: !!this.remote,
+      status: this.status,
     });
+    this.changed.fire();
+  }
+
+  // ---------------------------------------------------------------- sync between windows
+
+  /** Переводит окно в режим пульта: команды уходят ведущему окну, звук здесь не играет. */
+  setRemote(link: RemoteLink): void {
+    this.remote = link;
+    this.loadedTrackId = undefined;
+    this.post({ type: 'pause' });
+    this.pushState();
+  }
+
+  /**
+   * Окно становится ведущим. С `resume` продолжает воспроизведение с того места,
+   * где оно было; без него только принимает очередь и позицию.
+   */
+  async takeOver(resume = true): Promise<void> {
+    if (!this.remote) {
+      return;
+    }
+    this.remote = undefined;
+    const { playing, position } = this.status;
+    this.status = { ...this.status, playing: false, needsGesture: false };
+    this.pushState();
+    this.updateStatusBar();
+    if (resume && playing && this.current()) {
+      await this.playIndex(this.index, position);
+    }
+  }
+
+  /** Останавливает звук в этом окне, когда роль ведущего переходит другому окну. */
+  releaseAudio(): void {
+    this.post({ type: 'pause' });
+    this.loadedTrackId = undefined;
+  }
+
+  get playbackStatus(): PlaybackStatus {
+    return this.status;
+  }
+
+  sharedState(): SharedState {
+    return {
+      queue: this.queue,
+      index: this.index,
+      source: this.source,
+      liked: [...this.liked],
+      playlists: this.playlists,
+      searchResults: this.searchResults,
+      account: this.account,
+      lastError: this.lastError,
+      streamInfo: this.streamInfo,
+      audioUnlocked: this.unlocked,
+    };
+  }
+
+  /**
+   * Где запускать звук по команде из этого окна: здесь, если в панели этого окна звук
+   * разрешён или если он не разрешён и в ведущем (тогда просьба нажать появится тут, на глазах).
+   */
+  get shouldPlayHere(): boolean {
+    return this.unlocked || !this.leaderUnlocked;
+  }
+
+  applySharedState(s: SharedState): void {
+    this.queue = s.queue;
+    this.index = s.index;
+    this.source = s.source;
+    this.liked = new Set(s.liked);
+    this.playlists = s.playlists;
+    this.searchResults = s.searchResults;
+    this.account = s.account;
+    this.lastError = s.lastError;
+    this.streamInfo = s.streamInfo;
+    this.leaderUnlocked = s.audioUnlocked;
+    this.pushState();
+    this.updateStatusBar();
+  }
+
+  applyPlaybackStatus(status: PlaybackStatus): void {
+    this.status = status;
+    this.post({ type: 'progress', status });
+    this.updateStatusBar();
   }
 
   private viewTrack(t: Track): ViewTrack {
@@ -263,6 +405,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   // ---------------------------------------------------------------- account
 
   async refreshAccount(): Promise<Account | undefined> {
+    if (this.remote) {
+      return this.remote.call('refreshAccount', []);
+    }
     const client = await this.clientFactory();
     this.liked.clear();
     this.playlists = [];
@@ -299,6 +444,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   // ---------------------------------------------------------------- sources
 
   async playSource(source: Source): Promise<void> {
+    if (this.remote) {
+      return this.remote.call('playSource', [source]);
+    }
     const tracks = await this.fetchSource(source);
     this.source = source;
     this.queue = tracks;
@@ -310,7 +458,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
    * виден в статус-баре, звук загружается по первому нажатию play.
    */
   async preloadWave(): Promise<void> {
-    if (this.index >= 0 || !(await this.refreshAccount())) {
+    if (this.remote || this.index >= 0 || !(await this.refreshAccount())) {
       return;
     }
     const source: Source = { kind: 'wave' };
@@ -362,6 +510,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   async search(query: string): Promise<Track[]> {
+    if (this.remote) {
+      return this.remote.call('search', [query]);
+    }
     const client = await this.clientFactory();
     this.searchResults = await client.search(query);
     this.pushState();
@@ -369,6 +520,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   async loadPlaylists(): Promise<Playlist[]> {
+    if (this.remote) {
+      return this.remote.call('loadPlaylists', []);
+    }
     const acc = await this.requireAccount();
     const client = await this.clientFactory();
     this.playlists = await client.playlists(acc.uid);
@@ -377,6 +531,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   async playTracks(tracks: Track[], index: number, source: Source): Promise<void> {
+    if (this.remote) {
+      return this.remote.call('playTracks', [tracks, index, source]);
+    }
     this.source = source;
     this.queue = tracks;
     await this.playIndex(index);
@@ -393,7 +550,10 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     return { ...this.status, title: t ? `${artistLine(t)} — ${fullTitle(t)}` : undefined, queueLength: this.queue.length, index: this.index, source: this.sourceLabel() };
   }
 
-  async playIndex(index: number): Promise<void> {
+  async playIndex(index: number, startAt = 0): Promise<void> {
+    if (this.remote) {
+      return this.remote.call('playIndex', [index, startAt]);
+    }
     const track = this.queue[index];
     if (!track) {
       return;
@@ -416,7 +576,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     if (preview) {
       vscode.window.setStatusBarMessage('Яндекс Музыка: без Плюса доступен только 30-секундный фрагмент', 5000);
     }
-    this.post({ type: 'load', url, trackId: track.id, autoplay: true });
+    this.post({ type: 'load', url, trackId: track.id, autoplay: true, position: startAt });
     this.loadedTrackId = track.id;
 
     if (this.source?.kind === 'wave' && this.queue.length - index <= 2) {
@@ -443,12 +603,15 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   async playPause(): Promise<void> {
+    if (this.remote) {
+      return this.remote.call('playPause', []);
+    }
     if (this.index < 0) {
       await this.playSource(this.account ? { kind: 'wave' } : { kind: 'search', query: 'Хиты' });
       return;
     }
     if (this.loadedTrackId !== this.current()?.id) {
-      await this.playIndex(this.index);
+      await this.playIndex(this.index, this.status.position);
       return;
     }
     await this.ensureView();
@@ -456,6 +619,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   async next(auto = false): Promise<void> {
+    if (this.remote) {
+      return this.remote.call('next', [auto]);
+    }
     if (this.index + 1 < this.queue.length) {
       await this.playIndex(this.index + 1);
     } else if (this.source?.kind === 'wave') {
@@ -466,7 +632,17 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     }
   }
 
+  async seek(seconds: number): Promise<void> {
+    if (this.remote) {
+      return this.remote.call('seek', [seconds]);
+    }
+    this.post({ type: 'seek', value: seconds });
+  }
+
   async previous(): Promise<void> {
+    if (this.remote) {
+      return this.remote.call('previous', []);
+    }
     const loaded = this.loadedTrackId === this.current()?.id;
     if (loaded && (this.status.position > 3 || this.index === 0)) {
       this.post({ type: 'seek', value: 0 });
@@ -476,6 +652,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   async toggleLike(): Promise<boolean | undefined> {
+    if (this.remote) {
+      return this.remote.call('toggleLike', []);
+    }
     const track = this.current();
     if (!track) {
       return undefined;
