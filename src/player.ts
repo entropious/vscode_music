@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { Account, Playlist, Track, YandexMusicClient, artistLine, coverUrl, fullTitle } from './api';
+import { renderCard } from './card';
 
 export type Source = { kind: 'wave' } | { kind: 'liked' } | { kind: 'playlist'; playlist: Playlist } | { kind: 'search'; query: string };
 
@@ -93,6 +94,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   /** Кодек и битрейт текущего потока, например «MP3 320 кбит/с». */
   private streamInfo?: string;
   private lastTooltip?: string;
+  /** Обложка текущего трека для карточки в статус-баре: data:-адрес, загружается один раз на трек. */
+  private cardCover?: { url: string; data?: string };
   /** Трек, чей поток отдан в webview; у предзагруженной волны его ещё нет. */
   private loadedTrackId?: string;
   /** Задана, пока окно — пульт: команды уходят ведущему окну. */
@@ -139,6 +142,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
           this.post({ type: 'volume', value: vscode.workspace.getConfiguration('yandexMusic').get<number>('volume', 0.7) });
         }
       }),
+      // Цвета карточки в статус-баре зашиты в SVG, поэтому при смене темы её надо перерисовать.
+      vscode.window.onDidChangeActiveColorTheme(() => this.updateStatusBar()),
     );
   }
 
@@ -700,29 +705,47 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     this.changed.fire();
   }
 
+  /** Обложка для карточки. Пока она грузится, карточка рисуется с заглушкой и потом обновляется. */
+  private cardCoverFor(t: Track): string | undefined {
+    const url = coverUrl(t.coverUri, 200);
+    if (!url) {
+      return undefined;
+    }
+    if (this.cardCover?.url !== url) {
+      const entry: { url: string; data?: string } = { url };
+      this.cardCover = entry;
+      fetch(url)
+        .then(async (r) => {
+          if (!r.ok) {
+            return;
+          }
+          const type = r.headers.get('content-type') ?? 'image/jpeg';
+          entry.data = `data:${type};base64,${Buffer.from(await r.arrayBuffer()).toString('base64')}`;
+          if (this.cardCover === entry) {
+            this.updateStatusBar();
+          }
+        })
+        .catch(() => undefined);
+    }
+    return this.cardCover.data;
+  }
+
   /** Мини-плеер: карточка трека в статус-баре, показывается при наведении и по клику. */
   private hoverCard(t: Track | undefined): vscode.MarkdownString {
     const md = new vscode.MarkdownString(undefined, true);
     md.isTrusted = { enabledCommands: CARD_COMMANDS };
     md.supportHtml = true;
     if (t) {
-      const liked = this.liked.has(baseId(t.id));
-      const cover = coverUrl(t.coverUri, 100);
-      if (cover) {
-        md.appendMarkdown(`<img src="${cover}" width="64" height="64"/>\n\n`);
-      }
-      md.appendMarkdown(`**${escapeMd(fullTitle(t))}**  \n${escapeMd(artistLine(t))}  \n`);
-      const details = [this.sourceLabel(), fmtTime((t.durationMs ?? 0) / 1000), this.streamInfo].filter(Boolean).map((s) => escapeMd(s!));
-      md.appendMarkdown(`*${details.join(' · ')}*\n\n`);
-      // В заголовке ссылки и иконки крупнее: инлайн-стили размера hover не пропускает.
       md.appendMarkdown(
-        '# ' +
-        [
-          `[$(chevron-left)](command:yandexMusic.previous "Предыдущий")`,
-          this.status.playing ? `[$(debug-pause)](command:yandexMusic.playPause "Пауза")` : `[$(play)](command:yandexMusic.playPause "Играть")`,
-          `[$(chevron-right)](command:yandexMusic.next "Следующий")`,
-          liked ? `[$(heart-filled)](command:yandexMusic.like "Убрать из «Мне нравится»")` : `[$(heart)](command:yandexMusic.like "Нравится")`,
-        ].join('&nbsp;&nbsp;&nbsp;') + '\n\n',
+        renderCard({
+          title: fullTitle(t),
+          artists: artistLine(t),
+          cover: this.cardCoverFor(t),
+          source: this.sourceLabel(),
+          details: [fmtTime((t.durationMs ?? 0) / 1000), this.streamInfo].filter((x): x is string => !!x),
+          playing: this.status.playing,
+          liked: this.liked.has(baseId(t.id)),
+        }),
       );
     } else {
       md.appendMarkdown('**Яндекс Музыка**\n\n');

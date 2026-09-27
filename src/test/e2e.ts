@@ -228,7 +228,7 @@ async function main() {
 
       await step('статус-бар: наведение на трек показывает карточку с кнопками', async () => {
         await sb('track').hover();
-        await page.locator('.monaco-hover', { hasText: 'Тестовый трек 5' }).waitFor();
+        await page.locator('.monaco-hover img[alt*="Тестовый трек 5"]').waitFor();
         await page.screenshot({ path: path.join(shots, '4-statusbar-hover.png') });
         await page.locator('.monaco-hover a[href*="yandexMusic.playPause"], .monaco-hover a[data-href*="yandexMusic.playPause"]').first().click();
         await player(page).locator('#play[aria-label="Пауза"]').waitFor();
