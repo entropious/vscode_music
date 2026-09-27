@@ -147,7 +147,7 @@ async function main() {
       await page.screenshot({ path: path.join(shots, '0-token.png') });
       await page.keyboard.press('Enter');
       await page.locator('.activitybar [aria-label="Яндекс Музыка"]').first().click();
-      await player(page).locator('.account', { hasText: '👤' }).waitFor({ timeout: 30000 });
+      await player(page).locator('.account .name').waitFor({ timeout: 30000 });
       console.log(`(${await player(page).locator('.account').innerText()})`);
     });
 
@@ -176,14 +176,14 @@ async function main() {
     await step('Ctrl+Alt+P → пауза', async () => {
       await page.locator('.monaco-workbench .part.editor').click({ position: { x: 300, y: 200 } });
       await page.keyboard.press(`${mod}+Alt+P`);
-      await player(page).locator('#play', { hasText: '▶' }).waitFor();
+      await player(page).locator('#play[aria-label="Играть"]').waitFor();
     });
     await sleep(300);
     await expectSilence('на паузе');
 
     await step('кнопка ▶ в панели → продолжает', async () => {
       await player(page).locator('#play').click();
-      await player(page).locator('#play', { hasText: '⏸' }).waitFor();
+      await player(page).locator('#play[aria-label="Пауза"]').waitFor();
     });
     await expectSound('после паузы', real ? 0.01 : 0.1);
 
@@ -221,7 +221,7 @@ async function main() {
 
       await step('статус-бар: кнопка ⏸ ставит паузу', async () => {
         await sb('play').click();
-        await player(page).locator('#play', { hasText: '▶' }).waitFor();
+        await player(page).locator('#play[aria-label="Играть"]').waitFor();
       });
       await sleep(300);
       await expectSilence('пауза из статус-бара');
@@ -231,7 +231,7 @@ async function main() {
         await page.locator('.monaco-hover', { hasText: 'Тестовый трек 5' }).waitFor();
         await page.screenshot({ path: path.join(shots, '4-statusbar-hover.png') });
         await page.locator('.monaco-hover a[href*="yandexMusic.playPause"], .monaco-hover a[data-href*="yandexMusic.playPause"]').first().click();
-        await player(page).locator('#play', { hasText: '⏸' }).waitFor();
+        await player(page).locator('#play[aria-label="Пауза"]').waitFor();
       });
       await expectSound('play из всплывающей карточки', 0.1);
 
@@ -240,7 +240,7 @@ async function main() {
         await page.mouse.move(700, 500);
         await page.locator('.monaco-hover').first().waitFor({ state: 'hidden' });
         await sb('track').click();
-        const card = page.locator('.monaco-hover', { hasText: 'Моя волна' });
+        const card = page.locator('.monaco-hover').filter({ has: page.locator('a[href*="yandexMusic.next"], a[data-href*="yandexMusic.next"]') });
         await card.waitFor({ timeout: 3000 });
         // Трек играет, позиция обновляется каждую секунду — карточка не должна мигать.
         for (let i = 0; i < 6; i++) {

@@ -55,11 +55,7 @@ const CARD_COMMANDS = [
   'yandexMusic.next',
   'yandexMusic.like',
   'yandexMusic.playMyWave',
-  'yandexMusic.playLiked',
-  'yandexMusic.playPlaylist',
-  'yandexMusic.search',
   'yandexMusic.signIn',
-  'yandexMusic.player.focus',
 ];
 
 interface ViewTrack {
@@ -88,6 +84,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   private playlists: Playlist[] = [];
   private searchResults: Track[] = [];
   private account?: Account;
+  /** Статус аккаунта уже известен: без этого панель мигала бы экраном входа при запуске. */
+  private accountChecked = false;
   private status: PlaybackStatus = { playing: false, position: 0, duration: 0 };
   private loadingMore = false;
   private lastError?: string;
@@ -286,6 +284,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     const current = this.current();
     this.post({
       type: 'state',
+      signedOut: this.accountChecked && !this.account,
       account: this.account ? { login: this.account.login, name: this.account.displayName, hasPlus: this.account.hasPlus } : null,
       current: current ? this.viewTrack(current) : null,
       liked: current ? this.liked.has(baseId(current.id)) : false,
@@ -370,6 +369,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     this.playlists = s.playlists;
     this.searchResults = s.searchResults;
     this.account = s.account;
+    this.accountChecked = true;
     this.lastError = s.lastError;
     this.streamInfo = s.streamInfo;
     this.leaderUnlocked = s.audioUnlocked;
@@ -413,6 +413,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     this.playlists = [];
     if (!client.authorized) {
       this.account = undefined;
+      this.accountChecked = true;
       this.pushState();
       this.updateStatusBar();
       return undefined;
@@ -426,6 +427,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       this.account = undefined;
       this.lastError = errorText(e);
     }
+    this.accountChecked = true;
     this.pushState();
     this.updateStatusBar();
     return this.account;
@@ -724,17 +726,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       );
     } else {
       md.appendMarkdown('**Яндекс Музыка**\n\n');
+      md.appendMarkdown(this.account ? `[$(pulse) Моя волна](command:yandexMusic.playMyWave)` : `[$(account) Войти](command:yandexMusic.signIn)`);
     }
-    md.appendMarkdown('---\n\n');
-    const links = this.account
-      ? [
-          `[$(pulse) Моя волна](command:yandexMusic.playMyWave)`,
-          `[$(heart-filled) Мне нравится](command:yandexMusic.playLiked)`,
-          `[$(list-unordered) Плейлист…](command:yandexMusic.playPlaylist)`,
-        ]
-      : [`[$(account) Войти](command:yandexMusic.signIn)`];
-    links.push(`[$(search) Поиск…](command:yandexMusic.search)`, `[$(layout-sidebar-left) Панель](command:yandexMusic.player.focus "Очередь, плейлисты, громкость")`);
-    md.appendMarkdown(links.join('&nbsp;&nbsp;·&nbsp;&nbsp;'));
     return md;
   }
 
