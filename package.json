@@ -2,7 +2,7 @@
   "name": "vscode-yandex-music",
   "displayName": "Yandex Music Player",
   "description": "Слушайте Яндекс Музыку прямо в VS Code: Моя волна, «Мне нравится», плейлисты и поиск.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "entropious",
   "license": "MIT",
   "repository": {
