@@ -1,0 +1,12 @@
+src/**
+out/test/**
+test-fixtures/**
+screenshots/**
+docs/**
+DEVELOPMENT.md
+.vscode-test/**
+.probe/**
+.claude/**
+node_modules/**
+tsconfig.json
+**/*.map

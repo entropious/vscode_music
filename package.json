@@ -1,0 +1,182 @@
+{
+  "name": "vscode-yandex-music",
+  "displayName": "Yandex Music Player",
+  "description": "Listen to Yandex Music in VS Code: My Vibe, Liked, playlists and search.",
+  "version": "0.3.2",
+  "publisher": "entro",
+  "license": "MIT",
+  "pricing": "Free",
+  "icon": "media/icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "homepage": "https://github.com/entropious/vscode_music#readme",
+  "bugs": {
+    "url": "https://github.com/entropious/vscode_music/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/entropious/vscode_music"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "keywords": [
+    "music",
+    "yandex",
+    "yandex music",
+    "player",
+    "music player"
+  ],
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "yandexMusic",
+          "title": "Yandex Music",
+          "icon": "media/icon.svg"
+        }
+      ]
+    },
+    "views": {
+      "yandexMusic": [
+        {
+          "type": "webview",
+          "id": "yandexMusic.player",
+          "name": "Player"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "yandexMusic.signIn",
+        "title": "Sign In",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.setToken",
+        "title": "Enter OAuth Token Manually",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.signOut",
+        "title": "Sign Out",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.playPause",
+        "title": "Play / Pause",
+        "category": "Yandex Music",
+        "icon": "$(debug-pause)"
+      },
+      {
+        "command": "yandexMusic.next",
+        "title": "Next Track",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.previous",
+        "title": "Previous Track",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.like",
+        "title": "Like / Unlike",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.search",
+        "title": "Search and Play a Track",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.playMyWave",
+        "title": "Play My Vibe",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.playLiked",
+        "title": "Play Liked",
+        "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.playPlaylist",
+        "title": "Play a Playlist…",
+        "category": "Yandex Music"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "yandexMusic.playPause",
+        "key": "ctrl+alt+p",
+        "mac": "cmd+alt+p"
+      },
+      {
+        "command": "yandexMusic.next",
+        "key": "ctrl+alt+right",
+        "mac": "cmd+alt+right"
+      },
+      {
+        "command": "yandexMusic.previous",
+        "key": "ctrl+alt+left",
+        "mac": "cmd+alt+left"
+      }
+    ],
+    "configuration": {
+      "title": "Yandex Music",
+      "properties": {
+        "yandexMusic.quality": {
+          "type": "string",
+          "enum": [
+            "high",
+            "low"
+          ],
+          "default": "high",
+          "description": "Stream quality: high picks the highest MP3 bitrate available, low the lowest."
+        },
+        "yandexMusic.volume": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "default": 0.7,
+          "description": "Default volume, from 0 to 1."
+        },
+        "yandexMusic.apiBaseUrl": {
+          "type": "string",
+          "default": "https://api.music.yandex.net",
+          "description": "Yandex Music API endpoint. Change it only for debugging."
+        },
+        "yandexMusic.oauthBaseUrl": {
+          "type": "string",
+          "default": "https://oauth.yandex.ru",
+          "description": "Yandex OAuth server endpoint. Change it only for debugging."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node ./out/test/runTest.js",
+    "e2e": "npm run compile && node ./out/test/e2e.js",
+    "package": "vsce package --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^20.11.0",
+    "@types/vscode": "~1.85.0",
+    "@vscode/test-electron": "^2.4.1",
+    "@vscode/vsce": "^4.0.0",
+    "mocha": "^10.4.0",
+    "playwright-core": "^1.56.1",
+    "typescript": "^5.4.0"
+  }
+}

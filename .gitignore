@@ -1,0 +1,11 @@
+node_modules/
+out/
+.vscode-test/
+*.vsix
+screenshots/
+.probe/*
+!.probe/devhost.sh
+!.probe/devhost-check.js
+!.probe/mock.js
+!.probe/sync-state.js
+.claude/
