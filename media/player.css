@@ -1,0 +1,142 @@
+:root {
+  --fg: var(--vscode-foreground);
+  --muted: var(--vscode-descriptionForeground);
+  --card: color-mix(in srgb, var(--vscode-foreground) 5%, transparent);
+  --border: color-mix(in srgb, var(--vscode-foreground) 11%, transparent);
+  --chip: color-mix(in srgb, var(--vscode-foreground) 13%, transparent);
+  --hover: color-mix(in srgb, var(--vscode-foreground) 8%, transparent);
+  --bar: color-mix(in srgb, var(--vscode-foreground) 22%, transparent);
+  --accent: #ffcc00;
+  --accent-fg: #141416;
+  --accent-text: #ffcc00;
+  --like: #ff5a36;
+  --current: rgba(255, 204, 0, 0.09);
+  --current-text: #ffd84d;
+  --mono: var(--vscode-editor-font-family, monospace);
+}
+body.vscode-light {
+  --accent-text: #8a6a00;
+  --like: #e0351a;
+  --current: rgba(255, 204, 0, 0.22);
+  --current-text: var(--vscode-foreground);
+}
+
+body { padding: 0 16px 16px; color: var(--fg); font-family: var(--vscode-font-family); font-size: var(--vscode-font-size); }
+button, input { font-family: inherit; }
+button { cursor: pointer; }
+svg { display: block; flex: none; }
+#app { display: flex; flex-direction: column; gap: 14px; padding-top: 6px; }
+
+.icon-btn { width: 32px; height: 32px; border: none; border-radius: 8px; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; }
+.icon-btn:hover { background: var(--hover); color: var(--fg); }
+
+/* ------------------------------------------------------------ аккаунт */
+.account { display: flex; align-items: center; gap: 10px; }
+.account .avatar { width: 28px; height: 28px; border-radius: 50%; background: var(--chip); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; flex: none; }
+.account .name { flex: 1; min-width: 0; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* ------------------------------------------------------------ карточка трека */
+.card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.now .head { display: flex; gap: 12px; align-items: center; }
+.cover { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex: none; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
+.meta .source { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent-text); white-space: nowrap; overflow: hidden; }
+/* Справа от обложки в узкой панели мало места: название и исполнитель
+   переносятся на вторую строку и обрезаются только после неё. */
+.meta .title, .meta .artist { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; overflow-wrap: anywhere; }
+.meta .title { font-size: 15px; font-weight: 600; line-height: 1.25; }
+.meta .artist { font-size: 12px; color: var(--muted); line-height: 1.3; }
+.empty { font-size: 13px; color: var(--muted); line-height: 1.45; }
+
+/* В узкой панели обложка меньше, чтобы тексту справа от неё хватало места. */
+@media (max-width: 240px) {
+  .now .cover { width: 48px; height: 48px; }
+}
+/* Лайк стоит в ряду громкости, чтобы название и исполнитель занимали всю ширину. */
+.like { width: 34px; height: 34px; flex: none; margin: -9px -8px -9px 0; border: none; border-radius: 50%; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; }
+/* Контур сердца в иконке 24×24 нарисован ниже центра, поэтому иконка поднята. */
+.like svg { width: 22px; height: 22px; transform: translateY(-1px); }
+.like:hover { background: var(--hover); color: var(--fg); }
+.like.on { color: var(--like); background: color-mix(in srgb, var(--like) 14%, transparent); }
+
+/* Прогресс-«волна»: столбики, поверх — прозрачный ползунок для перемотки. */
+.wave { position: relative; height: 34px; }
+/* Столбик закрашивается слева направо на долю --f (0…1) своего отрезка трека. */
+.bars { --rest: var(--bar); height: 100%; display: flex; align-items: center; justify-content: space-between; }
+.bars i { width: 3px; border-radius: 2px; background: linear-gradient(to right, var(--accent) calc(var(--f, 0) * 100%), var(--rest) 0); }
+.wave input { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; opacity: 0; cursor: pointer; }
+.wave:hover .bars { --rest: color-mix(in srgb, var(--vscode-foreground) 32%, transparent); }
+.times { display: flex; justify-content: space-between; margin-top: -6px; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+
+.controls { display: flex; justify-content: center; align-items: center; gap: 18px; }
+.controls button { width: 40px; height: 40px; border: none; border-radius: 50%; background: transparent; color: var(--fg); display: flex; align-items: center; justify-content: center; padding: 0; }
+.controls button:hover { background: var(--hover); }
+.controls .play { width: 52px; height: 52px; background: var(--accent); color: var(--accent-fg); }
+.controls .play:hover { background: #ffd83d; }
+
+.vol { display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.vol input { flex: 1; min-width: 0; margin: 0; height: 16px; background: transparent; -webkit-appearance: none; appearance: none; cursor: pointer; --p: 70%; }
+.vol input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--fg) var(--p), var(--bar) var(--p)); }
+.vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%; background: var(--fg); opacity: 0; transition: opacity .15s; }
+.vol:hover input::-webkit-slider-thumb, .vol input:focus-visible::-webkit-slider-thumb { opacity: 1; }
+.vol .v { font-family: var(--mono); font-size: 11px; width: 22px; text-align: right; }
+
+/* ------------------------------------------------------------ быстрый старт и вкладки */
+.quick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.quick button { min-width: 0; height: 48px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--fg); display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; }
+.quick button:hover { background: var(--hover); }
+.quick button span:last-child { overflow: hidden; text-overflow: ellipsis; }
+.quick .wave-ic { color: var(--accent-text); }
+.quick .heart-ic { color: var(--like); }
+
+.tabs { display: flex; gap: 2px; min-width: 0; padding: 3px; border-radius: 10px; background: var(--card); border: 1px solid var(--border); }
+.tabs button { flex: 1 1 auto; min-width: 0; height: 30px; border: none; border-radius: 7px; background: transparent; color: var(--muted); font-size: 12px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 4px; }
+.tabs button:hover { color: var(--fg); }
+.tabs button.active { background: var(--chip); color: var(--fg); font-weight: 600; }
+
+/* ------------------------------------------------------------ списки */
+.list { list-style: none; margin: 0 -8px; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.list li { display: flex; align-items: center; gap: 10px; min-height: 46px; padding: 0 8px; border-radius: 10px; cursor: pointer; }
+.list li:hover { background: var(--hover); }
+.list li.current { background: var(--current); }
+.list li.current .t div:first-child { color: var(--current-text); font-weight: 600; }
+.list li.na { opacity: .45; }
+.list .thumb { position: relative; width: 34px; height: 34px; border-radius: 7px; flex: none; overflow: hidden; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.list .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Эквалайзер на обложке играющего трека: столбики пляшут, пока идёт звук, на паузе замирают. */
+.list .thumb .eq { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; gap: 2px; background: rgba(0, 0, 0, .55); }
+.list .thumb .eq i { width: 3px; height: 14px; border-radius: 2px; background: var(--accent); transform: scaleY(.4); animation: eq .9s ease-in-out infinite paused; }
+.list .thumb .eq i:nth-child(2) { animation-duration: .7s; animation-delay: -.35s; }
+.list .thumb .eq i:nth-child(3) { animation-duration: 1.1s; animation-delay: -.6s; }
+body.playing .list .thumb .eq i { animation-play-state: running; }
+@keyframes eq { 0%, 100% { transform: scaleY(.3); } 50% { transform: scaleY(1); } }
+@media (prefers-reduced-motion: reduce) { .list .thumb .eq i { animation: none; } }
+.list .t { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.list .t div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.list .t .a { font-size: 11px; color: var(--muted); }
+.list .d { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.hint { font-size: 12px; color: var(--muted); line-height: 1.45; }
+
+.searchbox { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 6px 0 12px; border-radius: 10px; background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, var(--border)); color: var(--muted); }
+.searchbox:focus-within { border-color: var(--accent); }
+.searchbox input { flex: 1; min-width: 0; border: none; outline: none; background: transparent; color: var(--vscode-input-foreground); font-size: 13px; }
+.searchbox button { height: 26px; border: none; border-radius: 6px; padding: 0 10px; background: var(--chip); color: var(--fg); font-size: 12px; }
+.searchbox button:hover { background: var(--accent); color: var(--accent-fg); }
+
+.btn { height: 36px; border: 1px solid var(--border); border-radius: 10px; background: var(--card); color: var(--fg); padding: 0 14px; font-size: 13px; }
+.btn:hover { background: var(--hover); }
+.error { color: var(--vscode-errorForeground); font-size: 12px; white-space: pre-wrap; padding: 10px 12px; border-radius: 10px; background: color-mix(in srgb, var(--vscode-errorForeground) 10%, transparent); }
+.gesture { height: 44px; border: none; border-radius: 12px; background: var(--accent); color: var(--accent-fg); font-size: 14px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.gesture:hover { background: #ffd83d; }
+
+/* ------------------------------------------------------------ вход */
+.signin { min-height: calc(100vh - 60px); display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; padding: 0 12px; text-align: center; }
+.signin h1 { margin: 0; font-size: 18px; font-weight: 600; }
+.signin p { margin: 8px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); }
+.signin .actions { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.signin .primary { width: 100%; height: 44px; border: none; border-radius: 12px; background: var(--accent); color: var(--accent-fg); font-size: 14px; font-weight: 600; }
+.signin .primary:hover { background: #ffd83d; }
+.link { background: none; border: none; color: var(--vscode-textLink-foreground); padding: 0; font-size: 12px; }
+.link:hover { color: var(--vscode-textLink-activeForeground); text-decoration: underline; }
+.signin .note { width: 100%; box-sizing: border-box; display: flex; gap: 10px; align-items: flex-start; padding: 12px; border-radius: 12px; background: var(--card); border: 1px solid var(--border); text-align: left; font-size: 12px; line-height: 1.45; color: var(--muted); }
+.signin .note svg { color: var(--accent-text); margin-top: 1px; }
