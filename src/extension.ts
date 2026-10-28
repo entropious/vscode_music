@@ -131,6 +131,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     vscode.commands.registerCommand('yandexMusic.next', guard(() => player.next())),
     vscode.commands.registerCommand('yandexMusic.previous', guard(() => player.previous())),
     vscode.commands.registerCommand('yandexMusic.like', guard(() => player.toggleLike())),
+    vscode.commands.registerCommand('yandexMusic.dislike', guard(() => player.toggleDislike())),
     vscode.commands.registerCommand('yandexMusic.playMyWave', guard(() => player.playSource({ kind: 'wave' }))),
     vscode.commands.registerCommand('yandexMusic.playLiked', guard(() => player.playSource({ kind: 'liked' }))),
     vscode.commands.registerCommand(

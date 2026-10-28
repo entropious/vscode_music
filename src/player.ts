@@ -197,6 +197,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   toggleLike(): Promise<boolean | undefined> {
     return this.run('toggleLike', []);
   }
+  toggleDislike(): Promise<boolean | undefined> {
+    return this.run('toggleDislike', []);
+  }
   search(query: string): Promise<Track[]> {
     return this.run('search', [query]);
   }
@@ -451,6 +454,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       account: c.account ? { login: c.account.login, name: c.account.displayName, hasPlus: c.account.hasPlus } : null,
       current: current ? this.viewTrack(current) : null,
       liked: current ? c.liked.has(baseId(current.id)) : false,
+      disliked: current ? c.disliked.has(baseId(current.id)) : false,
       ai: current ? c.slop[baseId(current.id)] === true : false,
       queue: c.queue.map((t) => this.viewTrack(t)),
       index: c.index,

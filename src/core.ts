@@ -23,6 +23,7 @@ export const REMOTE_METHODS = [
   'next',
   'previous',
   'toggleLike',
+  'toggleDislike',
   'seek',
   'setVolume',
   'search',
@@ -58,6 +59,7 @@ export interface SharedState {
   index: number;
   source?: Source;
   liked: string[];
+  disliked: string[];
   playlists: Playlist[];
   searchResults: Track[];
   account?: Account;
@@ -144,6 +146,7 @@ export class PlayerCore {
   index = -1;
   source?: Source;
   liked = new Set<string>();
+  disliked = new Set<string>();
   playlists: Playlist[] = [];
   searchResults: Track[] = [];
   account?: Account;
@@ -191,6 +194,7 @@ export class PlayerCore {
       index: this.index,
       source: this.source,
       liked: [...this.liked],
+      disliked: [...this.disliked],
       playlists: this.playlists,
       searchResults: this.searchResults,
       account: this.account,
@@ -208,6 +212,7 @@ export class PlayerCore {
     this.index = s.index;
     this.source = s.source;
     this.liked = new Set(s.liked);
+    this.disliked = new Set(s.disliked ?? []);
     this.playlists = s.playlists;
     this.searchResults = s.searchResults;
     this.account = s.account;
@@ -269,6 +274,7 @@ export class PlayerCore {
   async refreshAccount(): Promise<Account | undefined> {
     const client = await this.host.client();
     this.liked.clear();
+    this.disliked.clear();
     this.playlists = [];
     if (!client.authorized) {
       this.account = undefined;
@@ -279,8 +285,12 @@ export class PlayerCore {
     try {
       this.account = await client.accountStatus();
       this.lastError = undefined;
-      const likedIds = await client.likedTrackIds(this.account.uid).catch(() => []);
+      const [likedIds, dislikedIds] = await Promise.all([
+        client.likedTrackIds(this.account.uid).catch(() => []),
+        client.dislikedTrackIds(this.account.uid).catch(() => []),
+      ]);
       likedIds.forEach((id) => this.liked.add(baseId(id)));
+      dislikedIds.forEach((id) => this.disliked.add(baseId(id)));
     } catch (e) {
       this.account = undefined;
       this.lastError = errorText(e);
@@ -554,9 +564,46 @@ export class PlayerCore {
     const like = !this.liked.has(id);
     const client = await this.host.client();
     await client.setLike(acc.uid, track.id, like);
-    like ? this.liked.add(id) : this.liked.delete(id);
+    if (like) {
+      this.liked.add(id);
+      this.disliked.delete(id); // Yandex drops the dislike of a track that gets liked
+    } else {
+      this.liked.delete(id);
+    }
     this.changed();
     this.host.notice(like ? '♥ Added to Liked' : 'Removed from Liked');
     return like;
+  }
+
+  /**
+   * Dislikes the current track and moves on to the next one, as Yandex Music does; on a
+   * track that is already disliked, takes the dislike back and keeps playing.
+   */
+  async toggleDislike(): Promise<boolean | undefined> {
+    const track = this.current();
+    if (!track) {
+      return undefined;
+    }
+    const acc = await this.requireAccount();
+    const id = baseId(track.id);
+    const dislike = !this.disliked.has(id);
+    const client = await this.host.client();
+    await client.setDislike(acc.uid, track.id, dislike);
+    if (dislike) {
+      this.disliked.add(id);
+      this.liked.delete(id);
+      this.waveFeedback({ type: 'dislike', trackId: track.id, totalPlayedSeconds: this.status.position });
+      // Reported as a dislike already, so the switch to the next track isn't reported as a skip too.
+      this.finishedTrackId = track.id;
+    } else {
+      this.disliked.delete(id);
+      this.waveFeedback({ type: 'undislike', trackId: track.id });
+    }
+    this.changed();
+    this.host.notice(dislike ? 'Disliked: this track will not be recommended' : 'Dislike removed');
+    if (dislike) {
+      await this.next();
+    }
+    return dislike;
   }
 }

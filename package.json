@@ -93,6 +93,11 @@
         "category": "Yandex Music"
       },
       {
+        "command": "yandexMusic.dislike",
+        "title": "Dislike / Remove Dislike",
+        "category": "Yandex Music"
+      },
+      {
         "command": "yandexMusic.search",
         "title": "Search and Play a Track",
         "category": "Yandex Music"

@@ -60,7 +60,8 @@ export interface WaveBatch {
 export type WaveEvent =
   | { type: 'radioStarted' }
   | { type: 'trackStarted'; trackId: string }
-  | { type: 'trackFinished' | 'skip'; trackId: string; totalPlayedSeconds: number; trackLengthSeconds?: number };
+  | { type: 'trackFinished' | 'skip' | 'dislike'; trackId: string; totalPlayedSeconds: number; trackLengthSeconds?: number }
+  | { type: 'undislike'; trackId: string };
 
 function waveBatch(r: any, sessionId: string): WaveBatch {
   return { sessionId, batchId: r.batchId, tracks: (r.sequence ?? []).map((s: any) => normalizeTrack(s.track)) };
@@ -169,6 +170,17 @@ export class YandexMusicClient {
   async setLike(uid: Account['uid'], trackId: string, like: boolean): Promise<void> {
     const action = like ? 'add-multiple' : 'remove';
     await this.request(`/users/${uid}/likes/tracks/${action}`, { form: { 'track-ids': trackId } });
+  }
+
+  async dislikedTrackIds(uid: Account['uid']): Promise<string[]> {
+    const r = await this.request<any>(`/users/${uid}/dislikes/tracks`);
+    return (r.library?.tracks ?? []).map((t: any) => String(t.id));
+  }
+
+  /** A disliked track is left out of My Vibe and recommendations; disliking also removes the like. */
+  async setDislike(uid: Account['uid'], trackId: string, dislike: boolean): Promise<void> {
+    const action = dislike ? 'add-multiple' : 'remove';
+    await this.request(`/users/${uid}/dislikes/tracks/${action}`, { form: { 'track-ids': trackId } });
   }
 
   async playlists(uid: Account['uid']): Promise<Playlist[]> {

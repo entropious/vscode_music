@@ -114,13 +114,23 @@ suite('Yandex Music: logic against the mock API', function () {
     assert.strictEqual(api.player.core.slop['1001'], false, 'Test Track 1 is not AI');
     const s = await status();
     assert.strictEqual(s.index, 1, 'the AI track keeps playing');
-    assert.ok(!server.liked.has(1002), 'the AI track is not disliked or liked');
+    assert.ok(!server.liked.has(1002) && !server.disliked.has(1002), 'the AI track is not disliked or liked');
   });
 
   test('reaching the end of My Vibe loads more tracks', async () => {
     await vscode.commands.executeCommand('yandexMusic.next');
     await waitFor('more My Vibe tracks', async () => (await status()).queueLength > 3);
     assert.ok(server.log.some((l) => /^POST \/rotor\/session\/[^/]+\/tracks$/.test(l)), 'more tracks must come from the radio session');
+  });
+
+  test('dislike sends the track to dislikes, tells My Vibe and moves on to the next track', async () => {
+    const before = await status();
+    assert.strictEqual(before.index, 2);
+    assert.strictEqual(await vscode.commands.executeCommand('yandexMusic.dislike'), true);
+    assert.ok(server.disliked.has(1003), 'Test Track 3 must be disliked');
+    await waitFor('the next track', async () => (await status()).index === 3);
+    await waitFor('a dislike event for My Vibe', async () => server.feedback.some((f) => f.event.type === 'dislike' && f.event.trackId === '1003:503'));
+    assert.ok(!server.feedback.some((f) => f.event.type === 'skip' && f.event.trackId === '1003:503'), 'a disliked track is not also reported as skipped');
   });
 
   test('search and Liked', async () => {

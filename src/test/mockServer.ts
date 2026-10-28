@@ -21,6 +21,7 @@ export async function startMockServer(mp3Path: string) {
     albums: [{ id: 500 + n, title: 'Test Album' }],
   }));
   const liked = new Set<number>([1001]);
+  const disliked = new Set<number>();
   const log: string[] = [];
   /** My Vibe radio feedback as received: session ID, batch ID and the event. */
   const feedback: { sessionId: string; batchId?: string; event: any }[] = [];
@@ -100,6 +101,21 @@ export async function startMockServer(mp3Path: string) {
         }
         return json({ result: { revision: 1 } });
       }
+      if (p === '/users/42/dislikes/tracks') {
+        return json({ result: { library: { uid: 42, tracks: [...disliked].map((id) => ({ id: String(id) })) } } });
+      }
+      if ((m = p.match(/^\/users\/42\/dislikes\/tracks\/(add-multiple|remove)$/))) {
+        for (const id of (form.get('track-ids') ?? '').split(',')) {
+          const n = Number(id.split(':')[0]);
+          if (m[1] === 'remove') {
+            disliked.delete(n);
+          } else {
+            disliked.add(n);
+            liked.delete(n);
+          }
+        }
+        return json({ result: { revision: 1 } });
+      }
       if (p === '/users/42/playlists/list') {
         return json({ result: [{ uid: 42, kind: 3, title: 'Focus', trackCount: 2 }] });
       }
@@ -127,5 +143,5 @@ export async function startMockServer(mp3Path: string) {
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { base, log, liked, feedback, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, log, liked, disliked, feedback, close: () => new Promise<void>((r) => server.close(() => r())) };
 }

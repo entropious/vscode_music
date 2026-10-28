@@ -51,8 +51,7 @@
     heart: svg('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', 18, line),
     heartOn: svg('<path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/>', 18, 'fill="currentColor"'),
     wave: (size) => svg('<path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/>', size, 'fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"'),
-    speaker: svg('<path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/>', 16, line),
-    mute: svg('<path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 10l4 4"/><path d="M20 10l-4 4"/>', 16, line),
+    ban: svg('<circle cx="12" cy="12" r="8"/><path d="M6.5 6.5l11 11"/>', 18, line),
     logout: svg('<path d="M15 4h4v16h-4"/><path d="M10 8l-4 4 4 4"/><path d="M6 12h10"/>', 18, line),
     search: svg('<path d="M11 4a7 7 0 1 1 0 14a7 7 0 1 1 0-14"/><path d="M20 20l-4-4"/>', 16, 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'),
     note: svg('<path d="M9 18V5l11-2v13"/><path d="M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/><path d="M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/>', 18, line),
@@ -123,7 +122,7 @@
           <button class="play" id="play"></button>
           <button data-cmd="yandexMusic.next" title="Next" aria-label="Next">${I.next}</button>
         </div>
-        <div class="vol">${vol ? I.speaker : I.mute}<input id="vol" type="range" min="0" max="100" value="${vol}" aria-label="Volume"><span class="v" id="volv">${vol}</span>${cur ? `<button class="like ${s.liked ? 'on' : ''}" data-cmd="yandexMusic.like" title="${s.liked ? 'Remove from Liked' : 'Like'}" aria-label="${s.liked ? 'Remove from Liked' : 'Like'}">${s.liked ? I.heartOn : I.heart}</button>` : ''}</div>
+        <div class="vol">${cur ? `<button class="dislike ${s.disliked ? 'on' : ''}" data-cmd="yandexMusic.dislike" title="${s.disliked ? 'Remove dislike' : 'Dislike: never recommend this track'}" aria-label="${s.disliked ? 'Remove dislike' : 'Dislike'}">${I.ban}</button>` : ''}<input id="vol" type="range" min="0" max="100" value="${vol}" aria-label="Volume"><span class="v" id="volv">${vol}</span>${cur ? `<button class="like ${s.liked ? 'on' : ''}" data-cmd="yandexMusic.like" title="${s.liked ? 'Remove from Liked' : 'Like'}" aria-label="${s.liked ? 'Remove from Liked' : 'Like'}">${s.liked ? I.heartOn : I.heart}</button>` : ''}</div>
       </section>`;
   }
 

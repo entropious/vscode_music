@@ -60,6 +60,11 @@ svg { display: block; flex: none; }
 .like svg { width: 22px; height: 22px; transform: translateY(-1px); }
 .like:hover { background: var(--hover); color: var(--fg); }
 .like.on { color: var(--like); background: color-mix(in srgb, var(--like) 14%, transparent); }
+/* Dislike mirrors the like button at the other end of the volume row. */
+.dislike { width: 34px; height: 34px; flex: none; margin: -9px 0 -9px -8px; border: none; border-radius: 50%; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; }
+.dislike svg { width: 21px; height: 21px; }
+.dislike:hover { background: var(--hover); color: var(--fg); }
+.dislike.on { color: var(--fg); background: var(--chip); }
 
 /* Waveform progress: bars with a transparent seek slider laid on top. */
 .wave { position: relative; height: 34px; }
@@ -81,6 +86,8 @@ svg { display: block; flex: none; }
 .vol input::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: linear-gradient(to right, var(--fg) var(--p), var(--bar) var(--p)); }
 .vol input::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; margin-top: -4px; border-radius: 50%; background: var(--fg); opacity: 0; transition: opacity .15s; }
 .vol:hover input::-webkit-slider-thumb, .vol input:focus-visible::-webkit-slider-thumb { opacity: 1; }
+/* VS Code outlines whatever has focus; the sliders show focus by their thumb instead. */
+.vol input:focus, .wave input:focus { outline: none; }
 .vol .v { font-family: var(--mono); font-size: 11px; width: 22px; text-align: right; }
 
 /* ------------------------------------------------------------ quick start and tabs */
