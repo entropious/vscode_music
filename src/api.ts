@@ -46,7 +46,22 @@ interface DownloadInfo {
   preview?: boolean;
 }
 
-const WAVE_SEED = 'user:onyourwave';
+export const WAVE_SEED = 'user:onyourwave';
+
+/** A radio station, e.g. a genre. */
+export interface Station {
+  /** The radio seed, `genre:rock`. */
+  id: string;
+  tag: string;
+  /** The English name. */
+  name: string;
+  /** The Russian name, also matched by search. */
+  altName?: string;
+  /** The parent genre's seed for a subgenre. */
+  parent?: string;
+  icon?: string;
+  color?: string;
+}
 /** Where playback came from, as reported in radio feedback. */
 const FEEDBACK_FROM = 'vscode-yandex-music';
 
@@ -217,9 +232,30 @@ export class YandexMusicClient {
    * Starts a My Vibe radio session, which comes with a fresh selection. The station
    * endpoint below tends to return the same first batch every time listening starts.
    */
-  async waveStart(): Promise<WaveBatch> {
-    const r = await this.request<any>('/rotor/session/new', { json: { seeds: [WAVE_SEED], includeTracksInResponse: true } });
+  async waveStart(seed = WAVE_SEED): Promise<WaveBatch> {
+    const r = await this.request<any>('/rotor/session/new', { json: { seeds: [seed], includeTracksInResponse: true } });
     return waveBatch(r, r.radioSessionId);
+  }
+
+  /** Genre radio stations, such as `genre:rock`, named in English and Russian. */
+  async genreStations(): Promise<Station[]> {
+    const genres = (r: any[]) => r.map((x) => x.station).filter((s) => s?.id?.type === 'genre');
+    const [en, ru] = await Promise.all(
+      ['en', 'ru'].map((language) => this.request<any[]>(`/rotor/stations/list?language=${language}`).then(genres)),
+    );
+    const ruNames = new Map<string, string>(ru.map((s) => [String(s.id.tag), String(s.name ?? '')]));
+    return en.map((s) => {
+      const tag = String(s.id.tag);
+      return {
+        id: `genre:${tag}`,
+        tag,
+        name: String(s.name ?? tag),
+        altName: ruNames.get(tag),
+        parent: s.parentId ? `${s.parentId.type}:${s.parentId.tag}` : undefined,
+        icon: coverUrl(s.icon?.imageUrl, 200),
+        color: s.icon?.backgroundColor,
+      };
+    });
   }
 
   /** The next batch of a My Vibe session; `queue` lists the track IDs the session has already served. */
@@ -235,13 +271,13 @@ export class YandexMusicClient {
     await this.request(`/rotor/session/${sessionId}/feedback/`, { json: { event: body, batchId, from: FEEDBACK_FROM } });
   }
 
-  /** My Vibe through the station endpoint; used when a radio session can't be started. */
-  async myWave(lastTrackId?: string): Promise<Track[]> {
+  /** A radio station's tracks through the station endpoint; used when a radio session can't be started. */
+  async myWave(lastTrackId?: string, seed = WAVE_SEED): Promise<Track[]> {
     const q = new URLSearchParams({ 'settings2': 'true' });
     if (lastTrackId) {
       q.set('queue', lastTrackId.split(':')[0]);
     }
-    const r = await this.request<any>(`/rotor/station/user:onyourwave/tracks?${q}`);
+    const r = await this.request<any>(`/rotor/station/${seed}/tracks?${q}`);
     return (r.sequence ?? []).map((s: any) => normalizeTrack(s.track));
   }
 

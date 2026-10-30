@@ -411,6 +411,13 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
         case 'playSearchResult':
           await this.playTracks([...this.core.searchResults], m.index, { kind: 'search', query: m.query });
           break;
+        case 'playStation': {
+          const s = this.core.searchStations.find((x) => x.id === m.id);
+          if (s) {
+            await this.playSource({ kind: 'station', id: s.id, name: s.name });
+          }
+          break;
+        }
         case 'seekTo':
           await this.seek(m.value);
           break;
@@ -482,9 +489,11 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       queue: c.queue.map((t) => this.viewTrack(t)),
       index: c.index,
       source: sourceLabel(c.source),
+      sourceId: c.source?.kind === 'station' ? c.source.id : null,
       sourceShort: shortSourceLabel(c.source),
       playlists: c.playlists.map((p) => ({ id: `${p.uid}:${p.kind}`, title: p.title, count: p.trackCount })),
       searchResults: c.searchResults.map((t) => this.viewTrack(t)),
+      searchStations: c.searchStations.map((s) => ({ id: s.id, name: s.name, icon: s.icon, color: s.color })),
       error: c.lastError ?? null,
       remote: !!this.remote,
       status: c.status,

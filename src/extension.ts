@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { Track, YandexMusicClient, artistLine, fullTitle } from './api';
+import { type Station, Track, YandexMusicClient, artistLine, fullTitle } from './api';
 import { Auth } from './auth';
 import { Player } from './player';
 import { serviceBuild, socketPathFor } from './protocol';
@@ -150,21 +150,29 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     vscode.commands.registerCommand(
       'yandexMusic.search',
       guard(async (query?: string, index?: number) => {
-        const q = query ?? (await vscode.window.showInputBox({ prompt: 'Search Yandex Music', placeHolder: 'Artist or track' }));
+        const q = query ?? (await vscode.window.showInputBox({ prompt: 'Search Yandex Music', placeHolder: 'Artist, track or genre' }));
         if (!q) {
           return;
         }
         const results = await player.search(q);
-        if (!results.length) {
+        const stations = player.core.searchStations;
+        if (!results.length && !stations.length) {
           vscode.window.showInformationMessage(`No results for "${q}"`);
           return;
         }
         let i = index;
         if (i === undefined) {
-          const pick = await vscode.window.showQuickPick(
-            results.map((t: Track, n) => ({ label: fullTitle(t), description: artistLine(t), n })),
-            { placeHolder: 'Choose a track' },
+          const pick = await vscode.window.showQuickPick<vscode.QuickPickItem & { n?: number; station?: Station }>(
+            [
+              ...stations.map((s) => ({ label: `$(radio-tower) ${s.name}`, description: 'Genre station', station: s })),
+              ...results.map((t: Track, n) => ({ label: fullTitle(t), description: artistLine(t), n })),
+            ],
+            { placeHolder: 'Choose a genre station or a track' },
           );
+          if (pick?.station) {
+            await player.playSource({ kind: 'station', id: pick.station.id, name: pick.station.name });
+            return;
+          }
           i = pick?.n;
         }
         if (i !== undefined) {

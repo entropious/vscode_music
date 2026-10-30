@@ -140,6 +140,31 @@ suite('Yandex Music: logic against the mock API', function () {
     assert.ok(!server.feedback.some((f) => f.event.type === 'skip' && f.event.trackId === '1003:503'), 'a disliked track is not also reported as skipped');
   });
 
+  test('search finds genre stations in English and Russian, and a station plays as radio', async () => {
+    const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
+    const names = async (q: string) => {
+      await api.player.search(q);
+      return api.player.core.searchStations.map((s) => s.name);
+    };
+    assert.deepStrictEqual(await names('rock'), ['Rock', 'Russian Rock']);
+    assert.deepStrictEqual(await names('Рок'), ['Rock', 'Russian Rock']);
+    assert.deepStrictEqual(await names('electro'), ['Electronic']);
+    assert.deepStrictEqual(await names('indie rock'), ['Rock']);
+    assert.deepStrictEqual(await names('calm'), [], 'only genres');
+    assert.deepStrictEqual(await names('Test'), []);
+
+    await api.player.search('jazz');
+    const station = api.player.core.searchStations[0];
+    await api.player.playSource({ kind: 'station', id: station.id, name: station.name });
+    const s = await status();
+    assert.strictEqual(s.source, 'Station: Jazz');
+    assert.strictEqual(server.seeds.at(-1), 'genre:jazz');
+    await vscode.commands.executeCommand('yandexMusic.next');
+    await waitFor('a skip reported to the station session', async () =>
+      server.feedback.some((f) => f.sessionId === `session-${server.seeds.length}` && f.event.type === 'skip'),
+    );
+  });
+
   test('search and Liked', async () => {
     await vscode.commands.executeCommand('yandexMusic.search', 'Test', 4);
     await waitFor('the track from search', async () => {

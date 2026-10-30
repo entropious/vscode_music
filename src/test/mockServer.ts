@@ -26,6 +26,8 @@ export async function startMockServer(mp3Path: string) {
   /** My Vibe radio feedback as received: session ID, batch ID and the event. */
   const feedback: { sessionId: string; batchId?: string; event: any }[] = [];
   const stalled = new Set<string>();
+  /** Seeds of the radio sessions started, in order. */
+  const seeds: string[] = [];
   let sessions = 0;
   let base = '';
 
@@ -132,8 +134,29 @@ export async function startMockServer(mp3Path: string) {
         return json({ result: { tracks: [{ id: 1004, track: tracks[3] }, { id: 1005, track: tracks[4] }] } });
       }
       const sequence = (list: typeof tracks) => list.map((t) => ({ type: 'track', track: t }));
+      if (p === '/rotor/stations/list') {
+        const en = url.searchParams.get('language') === 'en';
+        const station = (tag: string, nameEn: string, nameRu: string, parent?: string) => ({
+          station: {
+            id: { type: 'genre', tag },
+            name: en ? nameEn : nameRu,
+            icon: { backgroundColor: '#5d4fd6', imageUrl: `avatars.example/genre-${tag}/%%` },
+            ...(parent ? { parentId: { type: 'genre', tag: parent } } : {}),
+          },
+        });
+        return json({
+          result: [
+            station('rusrock', 'Russian Rock', 'Русский рок', 'rock'),
+            station('rock', 'Rock', 'Рок'),
+            station('electronics', 'Electronic', 'Электроника'),
+            station('jazz', 'Jazz', 'Джаз'),
+            { station: { id: { type: 'mood', tag: 'calm' }, name: en ? 'Calm' : 'Спокойное' } },
+          ],
+        });
+      }
       if (p === '/rotor/session/new' && req.method === 'POST') {
         sessions++;
+        seeds.push(...(JSON.parse(bodyText || '{}').seeds ?? []));
         return json({ result: { radioSessionId: `session-${sessions}`, batchId: `batch-${sessions}-1`, sequence: sequence(tracks.slice(0, 3)) } });
       }
       if ((m = p.match(/^\/rotor\/session\/([^/]+)\/tracks$/)) && req.method === 'POST') {
@@ -152,5 +175,5 @@ export async function startMockServer(mp3Path: string) {
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { base, log, liked, disliked, feedback, close: () => new Promise<void>((r) => (server.close(() => r()), server.closeAllConnections())) };
+  return { base, log, liked, disliked, feedback, seeds, close: () => new Promise<void>((r) => (server.close(() => r()), server.closeAllConnections())) };
 }

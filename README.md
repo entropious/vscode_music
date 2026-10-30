@@ -20,7 +20,9 @@ as `.vsix` files: **Extensions → … → Install from VSIX…**
 ## Controls
 
 - **Player panel** — the `{✷}` icon in the Activity Bar. Cover art, a waveform
-  seek bar, volume, the queue, playlists and search.
+  seek bar, volume, the queue, playlists and search. Search also finds genres:
+  `rock`, `jazz` or `рок` puts up to three matching genre stations above the
+  tracks, and clicking one starts endless radio of that genre, as My Vibe does.
 - **Status bar** — `‹ ▶ ›` buttons and the current track. Hover over the track
   or click it to open a mini player with previous, play/pause, next and like.
 - **Keyboard shortcuts**
@@ -70,12 +72,13 @@ music closes, another one picks up from the same track and position.
 ## AI-generated music
 
 Tracks that are likely AI-generated get an **AI** mark in the player panel, the
-status bar and the mini player. The extension doesn't skip or dislike them; it
-only shows the mark. The verdict comes from [slopless.art](https://slopless.art),
+queue and search results, the status bar and the mini player. The extension
+doesn't skip or dislike them; it only shows the mark. The verdict comes from [slopless.art](https://slopless.art),
 a public database of AI music on Yandex Music that combines its own model with
 Yandex's own AI labels: a track counts as AI if either flags it, or if at least
-5% of one of its artists' tracks are AI. Each track you play is looked up there;
-turn this off with `yandexMusic.aiLabels`.
+5% of one of its artists' tracks are AI. The playing track, the next ones in the
+queue and search results are looked up there; turn this off with
+`yandexMusic.aiLabels`.
 
 ## Settings
 

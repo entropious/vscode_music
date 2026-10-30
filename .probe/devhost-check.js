@@ -256,6 +256,30 @@ const commands = {
   },
 
   // Real mouse clicks on queue rows, held down for a moment; each must start that track.
+  // Searches in the panel's Search tab, then lists the genre stations and tracks it shows.
+  async search(query = 'rock') {
+    await inPanel(`(async () => {
+      doc.querySelector('[data-tab="search"]').click();
+      await new Promise((r) => setTimeout(r, 100));
+      doc.getElementById('q').value = ${JSON.stringify(query)};
+      doc.getElementById('searchForm').requestSubmit();
+    })()`);
+    await sleep(1500);
+    await inPanel(`doc.getElementById('searchForm').scrollIntoView()`);
+    const r = await inPanel(`({
+      stations: [...doc.querySelectorAll('#stations li')].map((li) => li.querySelector('.t div').textContent),
+      tracks: doc.querySelectorAll('#results li').length,
+    })`);
+    console.log(JSON.stringify(r));
+  },
+
+  // Clicks the first genre station in the Search tab and reports the source that plays then.
+  async station() {
+    await inPanel(`doc.querySelector('#stations li').click()`);
+    await sleep(2000);
+    console.log(JSON.stringify(await inPanel(`doc.querySelector('.meta .source')?.textContent`)));
+  },
+
   async listclicks(times = '6') {
     const view = await playerView();
     const s = session(view.webSocketDebuggerUrl);

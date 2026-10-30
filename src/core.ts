@@ -1,8 +1,58 @@
-import type { Account, Playlist, Track, WaveBatch, WaveEvent, YandexMusicClient } from './api';
-import { artistLine, fullTitle } from './api';
+import type { Account, Playlist, Station, Track, WaveBatch, WaveEvent, YandexMusicClient } from './api';
+import { WAVE_SEED, artistLine, fullTitle } from './api';
 import type { SlopChecker } from './slop';
 
-export type Source = { kind: 'wave' } | { kind: 'liked' } | { kind: 'playlist'; playlist: Playlist } | { kind: 'search'; query: string };
+export type Source =
+  | { kind: 'wave' }
+  | { kind: 'station'; id: string; name: string }
+  | { kind: 'liked' }
+  | { kind: 'playlist'; playlist: Playlist }
+  | { kind: 'search'; query: string };
+
+function searchWords(text: string): string[] {
+  return text.toLowerCase().replace(/ё/g, 'е').split(/[^\p{L}\p{N}]+/u).filter(Boolean);
+}
+
+/**
+ * Genre stations that match a search query, best first: an exact name, then a name that starts
+ * with the query, then one with a word that does, then a name the query contains as words
+ * (`indie rock` finds Rock). English and Russian names and the tag are all matched; main
+ * genres go before subgenres.
+ */
+export function matchStations(stations: Station[], query: string, limit = 3): Station[] {
+  const q = searchWords(query).join(' ');
+  if (q.length < 2) {
+    return [];
+  }
+  const qWords = new Set(q.split(' '));
+  const rank = (s: Station): number | undefined => {
+    let best: number | undefined;
+    for (const words of [s.name, s.altName ?? '', s.tag].map(searchWords)) {
+      const name = words.join(' ');
+      const r =
+        name === q ? 0
+        : name.startsWith(q) ? 1
+        : words.some((w) => w.startsWith(q)) ? 2
+        : words.length && words.every((w) => qWords.has(w)) ? 3
+        : undefined;
+      if (r !== undefined && (best === undefined || r < best)) {
+        best = r;
+      }
+    }
+    return best;
+  };
+  return stations
+    .map((s) => ({ s, r: rank(s) }))
+    .filter((x): x is { s: Station; r: number } => x.r !== undefined)
+    .sort((a, b) => a.r - b.r || Number(!!a.s.parent) - Number(!!b.s.parent) || a.s.name.length - b.s.name.length)
+    .slice(0, limit)
+    .map((x) => x.s);
+}
+
+/** The radio seed of an endless source (My Vibe or a station), or undefined for a fixed list. */
+export function radioSeed(source: Source | undefined): string | undefined {
+  return source?.kind === 'wave' ? WAVE_SEED : source?.kind === 'station' ? source.id : undefined;
+}
 
 export interface PlaybackStatus {
   playing: boolean;
@@ -65,6 +115,7 @@ export interface SharedState {
   disliked: string[];
   playlists: Playlist[];
   searchResults: Track[];
+  searchStations: Station[];
   account?: Account;
   accountChecked: boolean;
   lastError?: string;
@@ -105,6 +156,8 @@ export function sourceLabel(source: Source | undefined): string {
   switch (source?.kind) {
     case 'wave':
       return 'My Vibe';
+    case 'station':
+      return `Station: ${source.name}`;
     case 'liked':
       return 'Liked';
     case 'playlist':
@@ -121,6 +174,8 @@ export function shortSourceLabel(source: Source | undefined): string {
   switch (source?.kind) {
     case 'wave':
       return 'Vibe';
+    case 'station':
+      return source.name;
     case 'liked':
       return 'Liked';
     case 'playlist':
@@ -152,6 +207,10 @@ export class PlayerCore {
   disliked = new Set<string>();
   playlists: Playlist[] = [];
   searchResults: Track[] = [];
+  /** Genre stations that match the last search. */
+  searchStations: Station[] = [];
+  /** All genre stations, loaded on the first search. */
+  private stations?: Promise<Station[]>;
   account?: Account;
   /** Account status is known; without this the panel would flash the sign-in screen on startup. */
   accountChecked = false;
@@ -202,6 +261,7 @@ export class PlayerCore {
       disliked: [...this.disliked],
       playlists: this.playlists,
       searchResults: this.searchResults,
+      searchStations: this.searchStations,
       account: this.account,
       accountChecked: this.accountChecked,
       lastError: this.lastError,
@@ -220,6 +280,7 @@ export class PlayerCore {
     this.disliked = new Set(s.disliked ?? []);
     this.playlists = s.playlists;
     this.searchResults = s.searchResults;
+    this.searchStations = s.searchStations ?? [];
     this.account = s.account;
     this.accountChecked = s.accountChecked;
     this.lastError = s.lastError;
@@ -380,8 +441,9 @@ export class PlayerCore {
     let tracks: Track[];
     switch (source.kind) {
       case 'wave':
+      case 'station':
         await this.requireAccount();
-        tracks = await this.startWave(client);
+        tracks = await this.startWave(client, source);
         break;
       case 'liked': {
         const acc = await this.requireAccount();
@@ -402,21 +464,23 @@ export class PlayerCore {
     return tracks;
   }
 
-  /** Starts a new My Vibe session; if that fails, falls back to the station endpoint. */
-  private async startWave(client: YandexMusicClient): Promise<Track[]> {
+  /** Starts a new radio session for My Vibe or a station; if that fails, falls back to the station endpoint. */
+  private async startWave(client: YandexMusicClient, source: Source): Promise<Track[]> {
     const log = this.host.log;
+    const seed = radioSeed(source) ?? WAVE_SEED;
+    const label = sourceLabel(source);
     try {
-      const batch = await client.waveStart();
+      const batch = await client.waveStart(seed);
       this.wave = { sessionId: batch.sessionId, batches: new Map() };
       this.rememberBatch(batch);
-      log.info(`My Vibe: session ${batch.sessionId}, batch ${batch.batchId}: ${batch.tracks.map(fullTitle).join(', ')}`);
-      void client.waveFeedback(batch.sessionId, batch.batchId, { type: 'radioStarted' }).catch((e) => log.warn(`My Vibe: radioStarted wasn't accepted: ${errorText(e)}`));
+      log.info(`${label}: session ${batch.sessionId}, batch ${batch.batchId}: ${batch.tracks.map(fullTitle).join(', ')}`);
+      void client.waveFeedback(batch.sessionId, batch.batchId, { type: 'radioStarted' }).catch((e) => log.warn(`${label}: radioStarted wasn't accepted: ${errorText(e)}`));
       return batch.tracks;
     } catch (e) {
       this.wave = undefined;
-      log.warn(`My Vibe: couldn't start a radio session, using the station endpoint: ${errorText(e)}`);
-      const tracks = await client.myWave();
-      log.info(`My Vibe from the station endpoint: ${tracks.map(fullTitle).join(', ')}`);
+      log.warn(`${label}: couldn't start a radio session, using the station endpoint: ${errorText(e)}`);
+      const tracks = await client.myWave(undefined, seed);
+      log.info(`${label} from the station endpoint: ${tracks.map(fullTitle).join(', ')}`);
       return tracks;
     }
   }
@@ -428,35 +492,49 @@ export class PlayerCore {
         this.rememberBatch(batch);
         return batch.tracks;
       } catch (e) {
-        // the session may have expired; the station endpoint still serves My Vibe
-        this.host.log.warn(`My Vibe: couldn't get more tracks from session ${this.wave.sessionId}: ${errorText(e)}`);
+        // the session may have expired; the station endpoint still serves the station
+        this.host.log.warn(`${sourceLabel(this.source)}: couldn't get more tracks from session ${this.wave.sessionId}: ${errorText(e)}`);
       }
     }
-    return client.myWave(this.current()?.id);
+    return client.myWave(this.current()?.id, radioSeed(this.source));
   }
 
   private rememberBatch(batch: WaveBatch): void {
     batch.tracks.forEach((t) => this.wave?.batches.set(t.id, batch.batchId));
   }
 
-  /** Reports playback to the My Vibe session, which shapes the next batches. Failures are only logged. */
+  /** Reports playback to the radio session, which shapes the next batches. Failures are only logged. */
   private waveFeedback(event: WaveEvent): void {
     const wave = this.wave;
-    if (this.source?.kind !== 'wave' || !wave) {
+    if (!radioSeed(this.source) || !wave) {
       return;
     }
     const log = this.host.log;
+    const label = sourceLabel(this.source);
     const batchId = 'trackId' in event ? wave.batches.get(event.trackId) : undefined;
     void this.host
       .client()
       .then((client) => client.waveFeedback(wave.sessionId, batchId, event))
-      .then(() => log.debug(`My Vibe: ${event.type} ${'trackId' in event ? event.trackId : ''}`))
-      .catch((e) => log.warn(`My Vibe: ${event.type} wasn't accepted: ${errorText(e)}`));
+      .then(() => log.debug(`${label}: ${event.type} ${'trackId' in event ? event.trackId : ''}`))
+      .catch((e) => log.warn(`${label}: ${event.type} wasn't accepted: ${errorText(e)}`));
   }
 
+  /** The genre station list rarely changes, so it is loaded once; a failed load is retried next time. */
+  private genreStations(client: YandexMusicClient): Promise<Station[]> {
+    this.stations ??= client.genreStations().catch((e) => {
+      this.host.log.warn(`Genre stations: ${errorText(e)}`);
+      this.stations = undefined;
+      return [];
+    });
+    return this.stations;
+  }
+
+  /** Tracks for the query, plus up to three genre stations whose names match it. */
   async search(query: string): Promise<Track[]> {
     const client = await this.host.client();
-    this.searchResults = await client.search(query);
+    const [tracks, stations] = await Promise.all([client.search(query), this.genreStations(client)]);
+    this.searchResults = tracks;
+    this.searchStations = matchStations(stations, query);
     this.changed();
     this.checkSlop(this.searchResults);
     return this.searchResults;
@@ -509,7 +587,7 @@ export class PlayerCore {
     this.waveFeedback({ type: 'trackStarted', trackId: track.id });
     this.changed();
 
-    if (this.source?.kind === 'wave' && this.queue.length - index <= 2) {
+    if (radioSeed(this.source) && this.queue.length - index <= 2) {
       void this.loadMoreWave();
     }
   }
@@ -547,7 +625,7 @@ export class PlayerCore {
   async next(auto = false): Promise<void> {
     if (this.index + 1 < this.queue.length) {
       await this.playIndex(this.index + 1);
-    } else if (this.source?.kind === 'wave') {
+    } else if (radioSeed(this.source)) {
       await this.loadMoreWave();
       await this.playIndex(this.index + 1);
     } else if (!auto && this.queue.length) {

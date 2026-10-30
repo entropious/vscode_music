@@ -123,6 +123,9 @@ body.playing .list .thumb .eq i { animation-play-state: running; }
 .list .t { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
 .list .t div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .list .t .a { font-size: 11px; color: var(--muted); }
+.list .station .thumb { color: #fff; }
+.list .station .thumb img { position: absolute; inset: 15%; width: 70%; height: 70%; object-fit: contain; }
+.list .station > svg { color: var(--accent-text); margin-right: 4px; }
 .list .marks { flex: none; display: flex; align-items: center; gap: 6px; }
 .list .liked { display: flex; color: var(--like); }
 .list .liked svg { width: 14px; height: 14px; }

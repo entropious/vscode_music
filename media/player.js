@@ -87,6 +87,15 @@
     return `<li data-i="${i}" class="${current ? 'current' : ''} ${t.available ? '' : 'na'}"><span class="thumb">${img}${eq}</span><div class="t"><div>${esc(t.title)}</div><div class="a">${esc(t.artists)}</div></div>${marks}<span class="d">${d}</span></li>`;
   }
 
+  function stationRow(st) {
+    const playing = state.sourceId === st.id;
+    const bg = /^#[0-9a-f]{3,8}$/i.test(st.color || '') ? ` data-bg="${st.color}"` : '';
+    // The wave shows through when the genre icon is missing or fails to load.
+    const img = st.icon ? `<img src="${esc(st.icon)}" alt="">` : '';
+    const eq = playing ? '<span class="eq"><i></i><i></i><i></i></span>' : '';
+    return `<li data-id="${esc(st.id)}" class="station ${playing ? 'current' : ''}"><span class="thumb"${bg}>${I.wave(18)}${img}${eq}</span><div class="t"><div>${esc(st.name)}</div><div class="a">Genre station</div></div>${I.wave(16)}</li>`;
+  }
+
   function signInView() {
     return `<div class="signin">
         ${LOGO}
@@ -108,7 +117,7 @@
       ? `<div class="head">
           ${cur.cover ? `<img class="cover" src="${esc(cur.cover)}" alt="">` : `<div class="cover">${I.note}</div>`}
           <div class="meta">
-            ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^My Vibe/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
+            ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^(My Vibe|Station)/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
             <div class="title" title="${esc(cur.title)}">${esc(cur.title)}</div>
             <div class="artist" title="${esc(cur.artists)}">${esc(cur.artists)}</div>
           </div>
@@ -150,7 +159,9 @@
         ? `<ul class="list" id="playlists">${s.playlists.map((p) => `<li data-id="${esc(p.id)}"><span class="thumb">${I.list}</span><div class="t"><div>${esc(p.title)}</div><div class="a">${p.count} ${p.count === 1 ? 'track' : 'tracks'}</div></div></li>`).join('')}</ul>`
         : `<button class="btn" id="loadPlaylists">Load playlists</button>`;
     } else if (tab === 'search') {
-      body = `<form class="searchbox" id="searchForm">${I.search}<input id="q" placeholder="Artist or track…" value="${esc(searchQuery)}" aria-label="Search"><button type="submit">Search</button></form>
+      const stations = s.searchStations || [];
+      body = `<form class="searchbox" id="searchForm">${I.search}<input id="q" placeholder="Artist, track or genre…" value="${esc(searchQuery)}" aria-label="Search"><button type="submit">Search</button></form>
+        ${stations.length ? `<ul class="list" id="stations">${stations.map(stationRow).join('')}</ul>` : ''}
         <ul class="list" id="results">${s.searchResults.map((t, i) => trackRow(t, i, !!cur && t.id === cur.id)).join('')}</ul>`;
     }
 
@@ -172,6 +183,7 @@
     // The panel's CSP forbids inline styles in markup, so sizes are set through the DOM.
     const heights = barHeights(cur ? cur.id : '');
     document.querySelectorAll('#bars i').forEach((b, i) => { /** @type {HTMLElement} */ (b).style.height = `${heights[i]}px`; });
+    document.querySelectorAll('[data-bg]').forEach((el) => { /** @type {HTMLElement} */ (el).style.background = /** @type {HTMLElement} */ (el).dataset.bg || ''; });
     const vol = /** @type {HTMLInputElement|null} */ (document.getElementById('vol'));
     if (vol) vol.style.setProperty('--p', `${vol.value}%`);
     updateProgress();
@@ -265,6 +277,10 @@
     if (needsGesture && audio.src) tryPlay();
   }, true);
   document.addEventListener('keydown', () => reportUnlocked(false), true);
+  // A cover or genre icon that fails to load is hidden rather than shown as a broken image.
+  document.addEventListener('error', (ev) => {
+    if (ev.target instanceof HTMLImageElement) ev.target.style.display = 'none';
+  }, true);
 
   // ------------------------------------------------------------------ events
   app.addEventListener('click', (ev) => {
@@ -288,6 +304,7 @@
       const list = el.parentElement && el.parentElement.id;
       if (list === 'queue') vscode.postMessage({ type: 'playIndex', index: Number(el.dataset.i) });
       if (list === 'results') vscode.postMessage({ type: 'playSearchResult', index: Number(el.dataset.i), query: searchQuery });
+      if (list === 'stations') vscode.postMessage({ type: 'playStation', id: el.dataset.id });
       if (list === 'playlists') {
         vscode.postMessage({ type: 'openPlaylist', id: el.dataset.id });
         tab = 'queue';
