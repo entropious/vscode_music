@@ -209,6 +209,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   toggleDislike(): Promise<boolean | undefined> {
     return this.run('toggleDislike', []);
   }
+  startTrackRadio(): Promise<void> {
+    return this.run('startTrackRadio', []);
+  }
   search(query: string): Promise<Track[]> {
     return this.run('search', [query]);
   }
@@ -494,6 +497,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       index: c.index,
       source: sourceLabel(c.source),
       sourceId: c.source?.kind === 'station' ? c.source.id : null,
+      trackRadio: !!current && c.source?.kind === 'station' && c.source.id === `track:${baseId(current.id)}`,
       sourceShort: shortSourceLabel(c.source),
       playlists: c.playlists.map((p) => ({ id: `${p.uid}:${p.kind}`, title: p.title, count: p.trackCount })),
       searchResults: c.searchResults.map((t) => this.viewTrack(t)),

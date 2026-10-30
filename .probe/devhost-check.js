@@ -273,6 +273,14 @@ const commands = {
     console.log(JSON.stringify(r));
   },
 
+  // Clicks an element of the panel, e.g. click .radio-btn, and reports the player's source line
+  // and whether the element is still there.
+  async click(selector) {
+    await inPanel(`doc.querySelector(${JSON.stringify(selector)}).click()`);
+    await sleep(2000);
+    console.log(JSON.stringify(await inPanel(`({ source: doc.querySelector('.meta .source')?.textContent, title: doc.querySelector('.meta .title')?.textContent, stillThere: !!doc.querySelector(${JSON.stringify(selector)}) })`)));
+  },
+
   // Clicks the first genre station in the Search tab and reports the source that plays then.
   async station() {
     await inPanel(`doc.querySelector('#stations li').click()`);

@@ -61,16 +61,14 @@ suite('Yandex Music: logic against the mock API', function () {
 
   test('My Vibe: the signed MP3 link reaches the webview, which asks for a click if it cannot autoplay', async () => {
     await vscode.commands.executeCommand('yandexMusic.playMyWave');
-    const s = await waitFor('the track to load in the webview', async () => {
+    // A loaded track either plays or, where autoplay isn't allowed, asks for a click.
+    const s = await waitFor('the track to play or ask for a click', async () => {
       const s = await status();
-      return s.duration > 7 && s;
+      return s.duration > 7 && (s.playing || s.needsGesture) && s;
     });
     assert.strictEqual(s.source, 'My Vibe');
     assert.ok(s.title?.includes('Test Track 1'), s.title);
     assert.ok(server.log.some((l) => l.startsWith('GET /get-mp3/')), 'the MP3 must be downloaded via the signed link');
-    if (!s.playing) {
-      assert.ok((await status()).needsGesture, 'when not playing, it must ask for a click');
-    }
   });
 
   test('tracks further down the queue get their AI marks before they play', async () => {
@@ -163,6 +161,21 @@ suite('Yandex Music: logic against the mock API', function () {
     await waitFor('a skip reported to the station session', async () =>
       server.feedback.some((f) => f.sessionId === `session-${server.seeds.length}` && f.event.type === 'skip'),
     );
+  });
+
+  test('track radio keeps the current track playing and queues similar music after it', async () => {
+    const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
+    const before = await status();
+    const id = api.player.core.current()!.id.split(':')[0];
+    const streams = server.log.filter((l) => l.startsWith('GET /get-mp3/')).length;
+    await vscode.commands.executeCommand('yandexMusic.trackRadio');
+    const s = await status();
+    assert.strictEqual(server.seeds.at(-1), `track:${id}`);
+    assert.strictEqual(s.title, before.title, 'the same track goes on');
+    assert.strictEqual(s.index, 0);
+    assert.ok(s.source.startsWith('Radio: '), s.source);
+    assert.ok(s.queueLength > 1, 'similar tracks follow');
+    assert.strictEqual(server.log.filter((l) => l.startsWith('GET /get-mp3/')).length, streams, 'the track is not reloaded');
   });
 
   test('search and Liked', async () => {

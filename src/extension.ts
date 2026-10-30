@@ -28,7 +28,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   if (process.platform === 'darwin') {
     const script = context.asAbsolutePath('out/service.js');
     const helper = context.asAbsolutePath('helper/avplayer.js');
-    const build = serviceBuild([script, helper]);
+    const build = serviceBuild(context.asAbsolutePath('out'), helper);
     service = new ServiceClient(
       player,
       socketPathFor(context.globalStorageUri.fsPath, 'service'),
@@ -133,6 +133,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     vscode.commands.registerCommand('yandexMusic.previous', guard(() => player.previous())),
     vscode.commands.registerCommand('yandexMusic.like', guard(() => player.toggleLike())),
     vscode.commands.registerCommand('yandexMusic.dislike', guard(() => player.toggleDislike())),
+    vscode.commands.registerCommand('yandexMusic.trackRadio', guard(() => player.startTrackRadio())),
     vscode.commands.registerCommand('yandexMusic.playMyWave', guard(() => player.playSource({ kind: 'wave' }))),
     vscode.commands.registerCommand('yandexMusic.playLiked', guard(() => player.playSource({ kind: 'liked' }))),
     vscode.commands.registerCommand(

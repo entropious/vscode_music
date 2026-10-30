@@ -117,9 +117,10 @@
       ? `<div class="head">
           ${cur.cover ? `<img class="cover" src="${esc(cur.cover)}" alt="">` : `<div class="cover">${I.note}</div>`}
           <div class="meta">
-            ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^(My Vibe|Station)/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
+            ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^(My Vibe|Station|Radio)/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
             <div class="title" title="${esc(cur.title)}">${esc(cur.title)}</div>
             <div class="artist" title="${esc(cur.artists)}">${esc(cur.artists)}</div>
+            ${s.trackRadio ? '' : `<button class="radio-btn" data-cmd="yandexMusic.trackRadio" title="Endless radio of music like this track">${I.wave(12)}<span>Track radio</span></button>`}
           </div>
         </div>`
       : `<div class="empty">Nothing is playing. Start My Vibe or search for a track.</div>`;

@@ -79,13 +79,14 @@ export const REMOTE_METHODS = [
   'search',
   'loadPlaylists',
   'refreshAccount',
+  'startTrackRadio',
 ] as const;
 export type RemoteMethod = (typeof REMOTE_METHODS)[number];
 
-/** Methods that load or control audio; everything else only reads or changes the queue and account. */
 /** How many tracks after the current one get AI marks ahead of time, so the queue shows them. */
 const SLOP_LOOKAHEAD = 25;
 
+/** Methods that load or control audio; everything else only reads or changes the queue and account. */
 export const AUDIO_METHODS =new Set<RemoteMethod>(['playSource', 'playTracks', 'playIndex', 'playPause', 'next', 'previous', 'seek']);
 
 /**
@@ -157,7 +158,7 @@ export function sourceLabel(source: Source | undefined): string {
     case 'wave':
       return 'My Vibe';
     case 'station':
-      return `Station: ${source.name}`;
+      return source.id.startsWith('track:') ? `Radio: ${source.name}` : `Station: ${source.name}`;
     case 'liked':
       return 'Liked';
     case 'playlist':
@@ -383,6 +384,27 @@ export class PlayerCore {
     this.source = source;
     this.queue = tracks;
     await this.playIndex(0);
+  }
+
+  /**
+   * Starts radio from the current track: the track keeps playing, and what follows it becomes
+   * an endless selection of similar music, the way Yandex Music's "My Vibe by track" works.
+   */
+  async startTrackRadio(): Promise<void> {
+    const track = this.current();
+    if (!track) {
+      return;
+    }
+    const source: Source = { kind: 'station', id: `track:${baseId(track.id)}`, name: fullTitle(track) };
+    const tracks = (await this.fetchSource(source)).filter((t) => baseId(t.id) !== baseId(track.id));
+    if (this.current() !== track) {
+      return; // the user has already switched tracks
+    }
+    this.source = source;
+    this.queue = [track, ...tracks];
+    this.index = 0;
+    this.changed();
+    this.checkSlopAround(0);
   }
 
   /**

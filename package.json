@@ -98,6 +98,11 @@
         "category": "Yandex Music"
       },
       {
+        "command": "yandexMusic.trackRadio",
+        "title": "Start Radio from Current Track",
+        "category": "Yandex Music"
+      },
+      {
         "command": "yandexMusic.search",
         "title": "Search and Play a Track",
         "category": "Yandex Music"

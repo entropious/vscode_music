@@ -64,7 +64,7 @@ async function until(fn, ms = 10000) {
 (async () => {
   fs.rmSync(logFile, { force: true });
   const server = await startMockServer(path.join(root, 'test-fixtures/tone.mp3'));
-  const build = serviceBuild([path.join(root, 'out/service.js'), path.join(root, 'helper/avplayer.js')]);
+  const build = serviceBuild(path.join(root, 'out'), path.join(root, 'helper/avplayer.js'));
   const settings = { protocol: PROTOCOL, ...build, token: MOCK_TOKEN, apiBaseUrl: server.base, quality: 'high', volume: 0, aiLabels: false };
   const service = spawn(process.execPath, [path.join(root, 'out/service.js'), socketPath, path.join(root, 'helper/avplayer.js'), logFile], { stdio: 'ignore' });
   const checks = {};

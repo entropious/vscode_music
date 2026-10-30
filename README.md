@@ -23,6 +23,8 @@ as `.vsix` files: **Extensions → … → Install from VSIX…**
   seek bar, volume, the queue, playlists and search. Search also finds genres:
   `rock`, `jazz` or `рок` puts up to three matching genre stations above the
   tracks, and clicking one starts endless radio of that genre, as My Vibe does.
+  **Track radio** under the current track keeps it playing and fills the queue
+  after it with endless music like it.
 - **Status bar** — `‹ ▶ ›` buttons and the current track. Hover over the track
   or click it to open a mini player with previous, play/pause, next and like.
 - **Keyboard shortcuts**

@@ -21,7 +21,7 @@ const GRACE_MS = 8000;
 const FIRST_CLIENT_MS = 20000;
 
 const [socketPath, helperPath, logFile] = process.argv.slice(2);
-const BUILD = serviceBuild([__filename, helperPath]);
+const BUILD = serviceBuild(__dirname, helperPath);
 
 function fileLogger(file: string): Logger {
   try {
@@ -288,6 +288,7 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
       return;
     case 'call': {
       if (!REMOTE_METHODS.includes(m.method)) {
+        send(socket, { type: 'result', id: m.id, error: `The player service doesn't support "${m.method}" yet. Reload every VS Code window to update it.` });
         return;
       }
       try {

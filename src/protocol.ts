@@ -58,8 +58,20 @@ export type Message =
   /** The service passes a message on to the windows, shown by the focused one. */
   | { type: 'notice'; text: string };
 
-/** Fingerprint of the service and audio helper files, so a window can tell a service of another build. */
-export function serviceBuild(files: string[]): { build: string; builtAt: number } {
+/**
+ * Fingerprint of the service's code, so a window can tell a service of another build: every
+ * module in `outDir` (the service loads the player core and the API client from there too)
+ * plus the audio helper.
+ */
+export function serviceBuild(outDir: string, helper: string): { build: string; builtAt: number } {
+  const files = [
+    ...fs
+      .readdirSync(outDir)
+      .filter((f) => f.endsWith('.js'))
+      .sort()
+      .map((f) => path.join(outDir, f)),
+    helper,
+  ];
   const hash = createHash('sha1');
   files.forEach((f) => hash.update(fs.readFileSync(f)));
   const builtAt = Math.max(...files.map((f) => fs.statSync(f).mtimeMs));
