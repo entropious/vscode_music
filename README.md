@@ -76,8 +76,8 @@ music closes, another one picks up from the same track and position.
 ## Fullscreen remote (macOS)
 
 **Yandex Music Remote** is a separate fullscreen app for a big screen: a large
-cover with a spinning record, a background in the cover's colors, a progress bar
-of bouncing bars and controls you can hit from across the room. It plays nothing
+cover with a spinning record, a background in the cover's colors, a waveform
+progress bar and controls you can hit from across the room. It plays nothing
 itself: it controls the player service that the extension runs on macOS, the
 same way a VS Code window does, and starts that service itself when it isn't
 running, so it works without VS Code open. The music keeps playing while the app

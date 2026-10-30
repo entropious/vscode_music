@@ -14,6 +14,8 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "allowImportingTsExtensions": true,
+    "allowJs": true,
+    "checkJs": true,
     "noEmit": true,
     "skipLibCheck": true
   },

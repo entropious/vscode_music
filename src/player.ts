@@ -308,6 +308,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     view.webview.html = this.html(view.webview, media);
     this.disposables.push(
       view.webview.onDidReceiveMessage((m) => this.onMessage(m)),
+      // The page stays alive while the panel is hidden (it may be playing), so it is told to stop animating.
+      view.onDidChangeVisibility(() => this.post({ type: 'visibility', visible: view.visible })),
       view.onDidDispose(() => {
         this.view = undefined;
         this.viewReady = undefined;
@@ -322,14 +324,16 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
 
   private html(webview: vscode.Webview, media: vscode.Uri): string {
     const nonce = Math.random().toString(36).slice(2) + Date.now().toString(36);
+    const artCss = webview.asWebviewUri(vscode.Uri.joinPath(media, 'nowArt.css'));
     const css = webview.asWebviewUri(vscode.Uri.joinPath(media, 'player.css'));
     const js = webview.asWebviewUri(vscode.Uri.joinPath(media, 'player.js'));
+    // player.js is a module and imports nowArt.js from the media folder, which the nonce doesn't cover.
     const csp = [
       `default-src 'none'`,
       `img-src ${webview.cspSource} https: data:`,
       `media-src https: http://127.0.0.1:* http://localhost:* blob:`,
       `style-src ${webview.cspSource}`,
-      `script-src 'nonce-${nonce}'`,
+      `script-src 'nonce-${nonce}' ${webview.cspSource}`,
     ].join('; ');
     return `<!DOCTYPE html>
 <html lang="en">
@@ -337,14 +341,15 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy" content="${csp}">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="stylesheet" href="${artCss}">
 <link rel="stylesheet" href="${css}">
 <title>Yandex Music</title>
 </head>
 <body>
-<div id="nowBg" class="now-bg" aria-hidden="true" hidden><div class="art-layers" id="artLayers"></div><div class="blob blob-a"></div><div class="blob blob-b"></div><div class="shade"></div></div>
+<div id="nowBg" class="now-bg" aria-hidden="true" hidden><div class="now-bg-covers" id="artLayers"></div><div class="now-blob now-blob-a blob-a"></div><div class="now-blob now-blob-b blob-b"></div><div class="shade"></div></div>
 <div id="app"></div>
 <audio id="audio" preload="auto"></audio>
-<script nonce="${nonce}" src="${js}"></script>
+<script type="module" nonce="${nonce}" src="${js}"></script>
 </body>
 </html>`;
   }

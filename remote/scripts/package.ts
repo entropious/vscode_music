@@ -19,6 +19,8 @@ const paths = await packager({
   arch: archArg === 'x64' || archArg === 'arm64' ? archArg : ['arm64', 'x64'],
   icon: path.join(root, 'build/icon.icns'),
   overwrite: true,
+  // GitHub serves the Electron zip slowly from some networks; the npmmirror copy is the same file.
+  download: { mirrorOptions: { mirror: process.env['ELECTRON_MIRROR'] ?? 'https://npmmirror.com/mirrors/electron/' } },
   asar: true,
   // Only the built files and package.json go into the app.
   ignore: [/^\/(src|dev|scripts|dist|build|node_modules)(\/|$)/, /^\/(tsconfig\.json|bun\.lock|\.gitignore)$/],

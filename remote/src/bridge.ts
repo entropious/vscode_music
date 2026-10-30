@@ -23,6 +23,7 @@ export interface Bridge {
   call<M extends RemoteMethod>(method: M, ...args: RemoteMethods[M]): Promise<unknown>;
   onEvent(listener: (event: BridgeEvent) => void): void;
   toggleFullScreen(): void;
+  leaveFullScreen(): void;
 }
 
 export const CHANNEL = {
@@ -30,4 +31,5 @@ export const CHANNEL = {
   event: 'ym:event',
   ready: 'ym:ready',
   fullScreen: 'ym:fullscreen',
+  leaveFullScreen: 'ym:leave-fullscreen',
 } as const;

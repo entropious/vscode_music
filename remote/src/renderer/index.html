@@ -5,15 +5,16 @@
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src https: data:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yandex Music Remote</title>
+<link rel="stylesheet" href="nowArt.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="root" class="root">
 
   <div class="bg" aria-hidden="true">
-    <div class="bg-art" id="bgArt"></div>
-    <div class="blob blob-a m"></div>
-    <div class="blob blob-b m"></div>
+    <div class="now-bg-covers" id="bgArt"></div>
+    <div class="now-blob now-blob-a blob-a"></div>
+    <div class="now-blob now-blob-b blob-b"></div>
     <div class="vignette"></div>
   </div>
 
@@ -50,14 +51,14 @@
       <section class="now" aria-label="Now playing">
         <div class="art" id="art">
           <div class="vinyl m" id="vinyl">
-            <div class="disc m">
-              <div class="label" id="vinylLabel"></div>
-              <div class="hole"></div>
+            <div class="now-disc disc">
+              <div class="now-disc-label" id="vinylLabel"></div>
+              <div class="now-disc-hole"></div>
             </div>
-            <div class="shine"></div>
+            <div class="now-shine"></div>
           </div>
           <div class="cover-wrap m" id="coverWrap">
-            <div class="cover m" id="cover">
+            <div class="cover now-breathe" id="cover">
               <svg class="cover-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><path d="M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/><path d="M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/></svg>
             </div>
           </div>
@@ -105,8 +106,6 @@
           <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5v14"/><path d="M19 5L9 12l10 7z"/></svg>
         </button>
         <div class="play-wrap">
-          <span class="pulse m" aria-hidden="true"></span>
-          <span class="pulse late m" aria-hidden="true"></span>
           <button id="playBtn" class="play" aria-label="Play">
             <svg class="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M8.5 5.5v13"/><path d="M15.5 5.5v13"/></svg>
             <svg class="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M7 5v14l12-7z"/></svg>

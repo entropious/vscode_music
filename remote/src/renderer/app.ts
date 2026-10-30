@@ -1,6 +1,6 @@
 import type { Bridge, LinkState } from '../bridge.ts';
 import { type PlaybackStatus, type RemoteMethod, type RemoteMethods, type SharedState, type Source, type Track, artistLine, baseId, coverUrl, fullTitle } from '../wire.ts';
-import { DEFAULT_PALETTE, type Palette, paletteOf } from './palette.ts';
+import { CoverLayers, DEFAULT_PALETTE, type Palette, alignNewAnimations, alignToFrames, barHeights, paletteOf } from '../../../media/nowArt.js';
 
 declare global {
   interface Window {
@@ -91,7 +91,7 @@ function sourceLabel(source: Source | undefined): string {
 // ---------------------------------------------------------------- elements
 
 const root = el('root');
-const bgArt = el('bgArt');
+const bgCovers = new CoverLayers(el('bgArt'));
 const cover = el('cover');
 const coverWrap = el('coverWrap');
 const vinylLabel = el('vinylLabel');
@@ -146,7 +146,6 @@ let tab: Tab = 'queue';
 let shownTrackId: string | undefined;
 /** The cover has been drawn once, for a track or for no track. */
 let shownOnce = false;
-let shownCover: string | undefined;
 let lastError: string | undefined;
 let playlistsRequested = false;
 /** The query the search results belong to. */
@@ -187,6 +186,26 @@ function run<M extends RemoteMethod>(method: M, ...args: RemoteMethods[M]): Prom
   });
 }
 
+// Writes that happen on every status from the service go through these: writing the same value
+// again still makes the page restyle and repaint.
+function setText(e: HTMLElement, text: string): void {
+  if (e.textContent !== text) {
+    e.textContent = text;
+  }
+}
+
+function setAttr(e: Element, name: string, value: string): void {
+  if (e.getAttribute(name) !== value) {
+    e.setAttribute(name, value);
+  }
+}
+
+function setHidden(e: HTMLElement, hidden: boolean): void {
+  if (e.hidden !== hidden) {
+    e.hidden = hidden;
+  }
+}
+
 /** Restarts a one-shot CSS animation by taking its class off and putting it back. */
 function replay(e: HTMLElement, className: string): void {
   e.classList.remove(className);
@@ -195,26 +214,6 @@ function replay(e: HTMLElement, className: string): void {
 }
 
 // ---------------------------------------------------------------- now playing
-
-function setBackground(url: string | undefined): void {
-  if (url === shownCover) {
-    return;
-  }
-  shownCover = url;
-  const layer = h('div', 'bg-layer');
-  const art = h('div');
-  if (url) {
-    art.style.backgroundImage = `url("${url}")`;
-  }
-  layer.append(art);
-  bgArt.append(layer);
-  // The previous covers go once the new one has faded in over them.
-  window.setTimeout(() => {
-    while (bgArt.children.length > 1 && bgArt.firstElementChild !== layer) {
-      bgArt.firstElementChild?.remove();
-    }
-  }, 1600);
-}
 
 function applyPalette(p: Palette): void {
   const s = root.style;
@@ -241,7 +240,7 @@ function showTrack(t: Track | undefined): void {
   cover.classList.toggle('empty', !big);
   const label = coverUrl(t?.coverUri, 200);
   vinylLabel.style.backgroundImage = label ? `url("${label}")` : '';
-  setBackground(coverUrl(t?.coverUri, 400));
+  bgCovers.show(coverUrl(t?.coverUri, 400));
   const small = coverUrl(t?.coverUri, 100);
   if (small) {
     paletteOf(small)
@@ -250,72 +249,129 @@ function showTrack(t: Track | undefined): void {
   } else {
     applyPalette(DEFAULT_PALETTE);
   }
-  // Each track gets its own bar shape, as in the design: two sines seeded by the track.
-  const seed = t ? hash(t.id) % 97 : 0;
+  const heights = barHeights(t?.id ?? '', BARS);
   barEls.forEach((b, i) => {
-    const k = i + seed * 11;
-    const height = 18 + Math.round(Math.abs(Math.sin(k * 0.71) * Math.sin(k * 0.23 + 1)) * 70) + (i % 3) * 4;
-    b.style.height = `${height}%`;
-    b.style.setProperty('--d', `${(0.55 + ((i * 37) % 9) * 0.09).toFixed(2)}s`);
-    b.style.setProperty('--delay', `${(-((i * 53) % 17) * 0.07).toFixed(2)}s`);
+    b.style.height = `${(heights[i] ?? 1) * 100}%`;
   });
 }
+
+const TITLE_MIN_PX = 32;
+/** A title stays on one line as long as that takes no less than this share of the full size. */
+const TITLE_ONE_LINE_SHARE = 0.6;
+let fittedWidth = 0;
+
+/**
+ * Picks the title size, up to the one in the stylesheet, at which no word is broken: one line
+ * if that doesn't make it much smaller, otherwise the largest size for two lines. Holding on
+ * to one line keeps the title from rewrapping, and the cover from moving, while the drawer
+ * slides. Words are broken only when one doesn't fit even at the smallest size.
+ */
+function fitTitle(): void {
+  fittedWidth = title.clientWidth;
+  title.classList.remove('cut');
+  title.style.fontSize = '';
+  // Measured as a plain block: the line clamp hides extra lines, and the glyphs stick out of
+  // the tight lines, so neither the clamped height nor scrollHeight tells the line count.
+  title.style.display = 'block';
+  const full = parseFloat(getComputedStyle(title).fontSize);
+  const fits = (lines: number, px: number): boolean => {
+    title.style.fontSize = `${px}px`;
+    return title.scrollWidth <= title.clientWidth && title.clientHeight <= lines * parseFloat(getComputedStyle(title).lineHeight) + 1;
+  };
+  const largest = (lines: number, min: number): number | undefined => {
+    if (fits(lines, full)) {
+      return full;
+    }
+    if (!fits(lines, min)) {
+      return undefined;
+    }
+    let lo = min;
+    let hi = full;
+    while (hi - lo > 1) {
+      const mid = (lo + hi) / 2;
+      if (fits(lines, mid)) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    return Math.floor(lo);
+  };
+  const size = largest(1, Math.max(TITLE_MIN_PX, full * TITLE_ONE_LINE_SHARE)) ?? largest(2, TITLE_MIN_PX);
+  title.style.fontSize = size === full ? '' : `${size ?? TITLE_MIN_PX}px`;
+  title.classList.toggle('cut', size === undefined);
+  title.style.display = '';
+}
+new ResizeObserver(() => {
+  if (title.clientWidth !== fittedWidth) {
+    fitTitle();
+  }
+}).observe(title);
+void document.fonts.ready.then(fitTitle);
 
 function renderNow(): void {
   const t = current();
   showTrack(t);
-  root.classList.toggle('playing', status.playing && !!t);
-  title.textContent = t ? fullTitle(t) : 'Nothing is playing';
-  title.classList.toggle('long', (t ? fullTitle(t) : '').length > 14);
-  artist.textContent = t ? artistLine(t) : 'Start My Vibe or Liked above';
+  const playing = status.playing && !!t;
+  if (root.classList.contains('playing') !== playing) {
+    root.classList.toggle('playing', playing);
+    // Resumed animations start anew, off the 30 Hz grid.
+    alignToFrames(root);
+  }
+  const titleText = t ? fullTitle(t) : 'Nothing is playing';
+  if (title.textContent !== titleText) {
+    title.textContent = titleText;
+    fitTitle();
+  }
+  setText(artist, t ? artistLine(t) : 'Start My Vibe or Liked above');
   const label = t ? sourceLabel(state?.source) : '';
-  sourceLabelEl.textContent = label;
+  setText(sourceLabelEl, label);
   sourceWave.toggleAttribute('hidden', !(state?.source?.kind === 'wave' || state?.source?.kind === 'station'));
-  aiBadge.hidden = !t || !isAi(t);
-  el('source').hidden = !label && aiBadge.hidden;
+  setHidden(aiBadge, !t || !isAi(t));
+  setHidden(el('source'), !label && aiBadge.hidden);
   const trackRadio = !!t && state?.source?.kind === 'station' && state.source.id === `track:${baseId(t.id)}`;
-  radioBtn.hidden = !t || trackRadio;
-  stream.textContent = t ? (state?.streamInfo ?? '').replace(/^MP3 /, 'MP3 · ') : '';
+  setHidden(radioBtn, !t || trackRadio);
+  setText(stream, t ? (state?.streamInfo ?? '').replace(/^MP3 /, 'MP3 · ') : '');
 
   const next = state && t ? state.queue[state.index + 1] : undefined;
-  upNext.hidden = !next;
+  setHidden(upNext, !next);
   if (next) {
     const art = coverUrl(next.coverUri, 100);
     el('nextArt').style.backgroundImage = art ? `url("${art}")` : '';
-    el('nextTitle').textContent = fullTitle(next);
-    el('nextArtist').textContent = `· ${artistLine(next)}`;
+    setText(el('nextTitle'), fullTitle(next));
+    setText(el('nextArtist'), `· ${artistLine(next)}`);
   }
 
-  playBtn.setAttribute('aria-label', status.playing ? 'Pause' : 'Play');
+  setAttr(playBtn, 'aria-label', status.playing ? 'Pause' : 'Play');
   const liked = !!t && isLiked(t);
-  likeBtn.setAttribute('aria-pressed', String(liked));
-  likeBtn.setAttribute('aria-label', liked ? 'Remove from Liked' : 'Like');
+  setAttr(likeBtn, 'aria-pressed', String(liked));
+  setAttr(likeBtn, 'aria-label', liked ? 'Remove from Liked' : 'Like');
   const disliked = !!t && !!state?.disliked?.includes(baseId(t.id));
-  dislikeBtn.setAttribute('aria-pressed', String(disliked));
-  dislikeBtn.setAttribute('aria-label', disliked ? 'Remove dislike' : 'Dislike and skip');
+  setAttr(dislikeBtn, 'aria-pressed', String(disliked));
+  setAttr(dislikeBtn, 'aria-label', disliked ? 'Remove dislike' : 'Dislike and skip');
   likeBtn.disabled = dislikeBtn.disabled = !t;
 
   const kind = state?.source?.kind;
-  pills.wave.setAttribute('aria-pressed', String(kind === 'wave'));
-  pills.liked.setAttribute('aria-pressed', String(kind === 'liked'));
-  pills.playlist.setAttribute('aria-pressed', String(kind === 'playlist'));
+  setAttr(pills.wave, 'aria-pressed', String(kind === 'wave'));
+  setAttr(pills.liked, 'aria-pressed', String(kind === 'liked'));
+  setAttr(pills.playlist, 'aria-pressed', String(kind === 'playlist'));
 
   const acc = state?.account;
   const avatar = el('avatar');
-  avatar.textContent = acc ? (acc.displayName || acc.login).trim().charAt(0).toUpperCase() : '';
-  avatar.setAttribute('aria-label', acc ? acc.displayName || acc.login : 'Account');
-  avatar.title = acc ? acc.login : '';
+  setText(avatar, acc ? (acc.displayName || acc.login).trim().charAt(0).toUpperCase() : '');
+  setAttr(avatar, 'aria-label', acc ? acc.displayName || acc.login : 'Account');
+  setAttr(avatar, 'title', acc ? acc.login : '');
 
   const vol = state?.volume;
   const pct = vol === undefined ? undefined : Math.round(vol * 100);
-  volLabel.textContent = pct === undefined ? '—' : String(pct);
+  setText(volLabel, pct === undefined ? '—' : String(pct));
   volFill.style.width = `${pct ?? 0}%`;
-  volTrack.setAttribute('aria-label', pct === undefined ? 'Volume' : `Volume ${pct}%`);
+  setAttr(volTrack, 'aria-label', pct === undefined ? 'Volume' : `Volume ${pct}%`);
   const muted = vol === 0;
   root.classList.toggle('muted', muted);
-  muteBtn.setAttribute('aria-pressed', String(muted));
-  muteBtn.setAttribute('aria-label', muted ? 'Unmute' : 'Mute');
-  totalEl.textContent = fmt(duration());
+  setAttr(muteBtn, 'aria-pressed', String(muted));
+  setAttr(muteBtn, 'aria-label', muted ? 'Unmute' : 'Mute');
+  setText(totalEl, fmt(duration()));
   paintProgress();
 }
 
@@ -329,20 +385,13 @@ function paintProgress(): void {
     litBars = lit;
     barEls.forEach((b, i) => b.classList.toggle('on', (i + 0.5) / BARS <= frac));
   }
-  bars.setAttribute('aria-valuenow', String(Math.round(frac * 100)));
-  bars.setAttribute('aria-valuetext', `${fmt(position())} of ${fmt(d)}`);
-  const text = fmt(position());
-  if (elapsedEl.textContent !== text) {
-    elapsedEl.textContent = text;
-  }
+  setAttr(bars, 'aria-valuenow', String(Math.round(frac * 100)));
+  setAttr(bars, 'aria-valuetext', `${fmt(position())} of ${fmt(d)}`);
+  setText(elapsedEl, fmt(position()));
 }
 
-function frame(): void {
-  if (status.playing) {
-    paintProgress();
-  }
-  requestAnimationFrame(frame);
-}
+/** The progress moves in whole seconds and half bars, so a few updates a second are enough. */
+const PROGRESS_TICK_MS = 250;
 
 // ---------------------------------------------------------------- drawer
 
@@ -668,6 +717,8 @@ document.addEventListener('keydown', (e) => {
       query.blur();
     } else if (drawerOpen) {
       openDrawer(false);
+    } else {
+      window.ym.leaveFullScreen();
     }
     return;
   }
@@ -740,5 +791,6 @@ window.ym.onEvent((event) => {
   }
 });
 
+alignNewAnimations();
 renderAll();
-requestAnimationFrame(frame);
+window.setInterval(() => status.playing && paintProgress(), PROGRESS_TICK_MS);

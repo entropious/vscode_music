@@ -1,4 +1,6 @@
 // @ts-check
+import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, paletteOf } from './nowArt.js';
+
 (function () {
   // @ts-ignore
   const vscode = acquireVsCodeApi();
@@ -60,20 +62,7 @@
   };
   const LOGO = `<svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect width="24" height="24" rx="5.4" fill="#110503"/><g transform="translate(2.4 2.4) scale(0.8)"><path d="M7 4c-2 0-2.5 1-2.5 3v2c0 1.5-.8 2.5-2 3 1.2.5 2 1.5 2 3v2c0 2 .5 3 2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="M17 4c2 0 2.5 1 2.5 3v2c0 1.5.8 2.5 2 3-1.2.5-2 1.5-2 3v2c0 2-.5 3-2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="m130.863 57.739-.468-2.327-19.788-3.457 11.498-15.557-1.337-1.462-16.913 8.11 2.139-21.54-1.738-.997-10.295 17.418L82.395 12H80.39l2.74 25.064-29.08-23.269-2.474.732 22.396 28.122-44.323-14.76-2.006 2.261L67.22 52.686l-54.618 4.521-.602 3.39 56.757 6.184-47.33 39.157 2.005 2.726 56.356-30.648-11.164 53.983h3.41l21.592-50.792 13.17 39.756 2.34-1.795-5.415-40.42 20.524 23.268 1.337-2.128-15.711-28.853 21.928 8.111.201-2.46-19.655-14.493 18.518-4.454Z" transform="translate(5.55 6.9) scale(0.085)" fill="#FFEE00"/></g></svg>`;
 
-  // Waveform bar heights are derived from the track ID, so each track gets its own shape.
   const BARS = 44;
-  function barHeights(id) {
-    let h = 2166136261;
-    for (const c of String(id)) h = Math.imul(h ^ c.charCodeAt(0), 16777619);
-    const out = [];
-    for (let i = 0; i < BARS; i++) {
-      h = Math.imul(h ^ (h >>> 15), 2246822507) >>> 0;
-      const r = (h % 1000) / 1000;
-      const env = 0.55 + 0.45 * Math.abs(Math.sin(i * 0.23 + 1));
-      out.push(Math.round(6 + env * (8 + r * 20)));
-    }
-    return out;
-  }
   /** Last fill of each bar, so the DOM is only touched when it changes. */
   let barFill = [];
 
@@ -115,7 +104,7 @@
     const vol = Math.round(audio.volume * 100);
     const head = cur
       ? `<div class="head">
-          <div class="art"><div class="vinyl"><div class="disc" id="disc"><div class="label" id="vinylLabel"></div><div class="hole"></div></div></div>${cur.cover ? `<img class="cover" src="${esc(cur.cover)}" alt="">` : `<div class="cover">${I.note}</div>`}</div>
+          <div class="art"><div class="vinyl"><div class="now-disc disc" id="disc"><div class="now-disc-label" id="vinylLabel"></div><div class="now-disc-hole"></div></div><div class="now-shine"></div></div>${cur.cover ? `<img class="cover now-breathe" src="${esc(cur.cover)}" alt="">` : `<div class="cover now-breathe">${I.note}</div>`}</div>
           <div class="meta">
             ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^(My Vibe|Station|Radio)/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
             <div class="title" title="${esc(cur.title)}">${esc(cur.title)}</div>
@@ -182,14 +171,14 @@
       </div>
       ${body}`;
     // The panel's CSP forbids inline styles in markup, so sizes are set through the DOM.
-    const heights = barHeights(cur ? cur.id : '');
-    // Each bar bounces at its own pace, as in the fullscreen remote's progress.
+    const heights = barHeights(cur ? String(cur.id) : '', BARS);
     document.querySelectorAll('#bars i').forEach((b, i) => {
-      const bar = /** @type {HTMLElement} */ (b);
-      bar.style.height = `${heights[i]}px`;
-      bar.style.setProperty('--d', `${(0.55 + ((i * 37) % 9) * 0.09).toFixed(2)}s`);
-      bar.style.setProperty('--delay', `${(-((i * 53) % 17) * 0.07).toFixed(2)}s`);
+      /** @type {HTMLElement} */ (b).style.height = `${heights[i] * 100}%`;
     });
+    // The rebuilt record goes on turning from where the previous one was, in whole steps.
+    trackTurn();
+    const disc = document.getElementById('disc');
+    if (disc) disc.style.animationDelay = `${-Math.round((turnedMs % TURN_MS) / FRAME_MS) * FRAME_MS}ms`;
     document.querySelectorAll('[data-bg]').forEach((el) => { /** @type {HTMLElement} */ (el).style.background = /** @type {HTMLElement} */ (el).dataset.bg || ''; });
     const vol = /** @type {HTMLInputElement|null} */ (document.getElementById('vol'));
     if (vol) vol.style.setProperty('--p', `${vol.value}%`);
@@ -201,8 +190,7 @@
   // The card's background lives outside #app, which is rebuilt on every state change, so its
   // slow drift and the cross-fade between covers aren't restarted; it follows the card's box.
   const nowBg = /** @type {HTMLElement} */ (document.getElementById('nowBg'));
-  const artLayers = /** @type {HTMLElement} */ (document.getElementById('artLayers'));
-  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  const coverLayers = new CoverLayers(/** @type {HTMLElement} */ (document.getElementById('artLayers')));
   let artTrackId = null;
   let artCover = null;
   const cardObserver = new ResizeObserver(() => placeBg());
@@ -214,42 +202,6 @@
     const r = card.getBoundingClientRect();
     const b = document.body.getBoundingClientRect();
     Object.assign(nowBg.style, { top: `${r.top - b.top}px`, left: `${r.left - b.left}px`, width: `${r.width}px`, height: `${r.height}px` });
-  }
-
-  /** Colors of a cover, read from its pixels: Yandex serves covers with CORS, so a canvas may read them. */
-  function paletteOf(url) {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      img.onload = () => {
-        try {
-          const n = 16;
-          const c = document.createElement('canvas');
-          c.width = c.height = n;
-          const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d', { willReadFrequently: true }));
-          ctx.drawImage(img, 0, 0, n, n);
-          const d = ctx.getImageData(0, 0, n, n).data;
-          const px = [];
-          for (let i = 0; i < d.length; i += 4) {
-            const [r, g, bl] = [d[i], d[i + 1], d[i + 2]];
-            const max = Math.max(r, g, bl);
-            const sat = max ? (max - Math.min(r, g, bl)) / max : 0;
-            px.push({ c: [r, g, bl], score: sat * 0.7 + (max / 255) * 0.3 });
-          }
-          px.sort((x, y) => y.score - x.score);
-          const rgb = (p, minV) => {
-            const m = Math.max(...p.c, 1) / 255;
-            const k = m < minV ? minV / m : 1;
-            return `rgb(${p.c.map((v) => Math.min(255, Math.round(v * k))).join(',')})`;
-          };
-          resolve({ a: rgb(px[0], 0.6), b: rgb(px[Math.floor(px.length / 5)], 0.5) });
-        } catch (e) {
-          reject(e);
-        }
-      };
-      img.onerror = reject;
-      img.src = url;
-    });
   }
 
   /** Sets the record's label and the card's background to the current cover; animates a track change. */
@@ -269,13 +221,7 @@
     if (url !== artCover) {
       artCover = url;
       if (url) {
-        const layer = document.createElement('div');
-        layer.className = 'art-layer';
-        const inner = document.createElement('div');
-        inner.style.backgroundImage = `url("${url}")`;
-        layer.appendChild(inner);
-        artLayers.appendChild(layer);
-        setTimeout(() => { while (artLayers.children.length > 1 && artLayers.firstElementChild !== layer) artLayers.firstElementChild?.remove(); }, 1600);
+        coverLayers.show(url);
         paletteOf(url.replace(/\d+x\d+$/, '100x100'))
           .then((p) => { if (artCover === url) { nowBg.style.setProperty('--pal-a', p.a); nowBg.style.setProperty('--pal-b', p.b); } })
           .catch(() => undefined);
@@ -285,14 +231,16 @@
   }
   window.addEventListener('resize', placeBg);
 
-  /** Turns the record while music plays: kept in JS so a rebuilt card picks up where it was. */
-  let spin = 0;
-  let spinAt = performance.now();
-  function turnRecord(now) {
-    if (isPlaying() && !reduceMotion.matches) spin = (spin + (now - spinAt) * 0.2) % 360;
-    spinAt = now;
-    const disc = document.getElementById('disc');
-    if (disc) disc.style.transform = `rotate(${spin}deg)`;
+  /** One turn of the record in nowArt.css. */
+  const TURN_MS = 3600;
+  /** How long the record has turned, so that a rebuilt card's record starts where the last one was. */
+  let turnedMs = 0;
+  /** @type {number|null} */
+  let turningSince = null;
+  function trackTurn() {
+    const now = performance.now();
+    if (turningSince !== null) turnedMs += now - turningSince;
+    turningSince = isPlaying() ? now : null;
   }
 
   /**
@@ -314,19 +262,16 @@
     });
   }
 
-  // While audio is playing, the waveform and time counter update every frame rather than
-  // on timeupdate (~4 times a second) or on the playing window's status (once a second).
-  function frame(now) {
-    turnRecord(now);
-    if (isPlaying()) {
-      paintBars();
-      const pos = document.getElementById('pos');
-      const text = fmt(position());
-      if (pos && pos.textContent !== text) pos.textContent = text;
-    }
-    requestAnimationFrame(frame);
-  }
-  requestAnimationFrame(frame);
+  // While audio plays in a visible panel, the waveform and time counter move a few times a
+  // second: the playing window reports its status only once a second.
+  let visible = true;
+  setInterval(() => {
+    if (!visible || !isPlaying()) return;
+    paintBars();
+    const pos = document.getElementById('pos');
+    const text = fmt(position());
+    if (pos && pos.textContent !== text) pos.textContent = text;
+  }, 250);
 
   function updateProgress() {
     const pos = document.getElementById('pos');
@@ -338,7 +283,12 @@
     if (dur) dur.textContent = fmt(duration());
     if (seek && !seeking) seek.value = String(Math.round(frac * 1000));
     paintBars();
-    document.body.classList.toggle('playing', isPlaying());
+    trackTurn();
+    if (document.body.classList.contains('playing') !== isPlaying()) {
+      document.body.classList.toggle('playing', isPlaying());
+      // Resumed animations start anew, off the 30 Hz grid.
+      alignToFrames(document.body);
+    }
     if (play) {
       const label = isPlaying() ? 'Pause' : 'Play';
       if (play.getAttribute('aria-label') !== label) {
@@ -460,7 +410,7 @@
   }
   let lastReport = 0;
   audio.addEventListener('timeupdate', () => {
-    updateProgress();
+    if (visible) updateProgress();
     const now = Date.now();
     if (now - lastReport > 1000) {
       lastReport = now;
@@ -535,9 +485,15 @@
         audio.volume = m.value;
         render();
         break;
+      case 'visibility':
+        visible = m.visible;
+        document.body.classList.toggle('hidden-view', !visible);
+        if (visible) updateProgress();
+        break;
     }
   });
 
+  alignNewAnimations();
   render();
   vscode.postMessage({ type: 'ready' });
 })();

@@ -1,0 +1,42 @@
+/* The now-playing art shared by the player panel (player.css) and the fullscreen remote
+   (remote/src/renderer/style.css): the background in the cover's colors, the record, the cover's
+   breathing. Each page sizes and places them. Only transforms and opacity
+   animate; the blur is baked into the cover image (blurredOf in nowArt.js). The record and the
+   cover move only under an ancestor with the class `playing`.
+   The endless animations move in steps of 1/30 s (their durations are whole numbers of steps),
+   and alignToFrames in nowArt.js puts them on one 30 Hz grid, so the page draws 30 frames a
+   second instead of the display's 60 or 120. */
+
+/* Registered so that the spots change color smoothly from one cover to the next. */
+@property --pal-a { syntax: '<color>'; inherits: true; initial-value: #3B8FA8; }
+@property --pal-b { syntax: '<color>'; inherits: true; initial-value: #6A5CFF; }
+
+@keyframes now-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes now-spin { to { transform: rotate(360deg); } }
+@keyframes now-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(var(--breathe, 1.025)); } }
+@keyframes now-bounce { 0% { transform: scaleY(1); } 100% { transform: scaleY(.38); } }
+
+/* Background: the blurred covers (CoverLayers in nowArt.js) under two soft spots in the palette's
+   colors. It stands still; a new cover fades in over the previous one. A page places and sizes
+   .now-bg-covers and the spots. */
+.now-bg-covers { position: absolute; inset: -18%; opacity: .95; }
+.now-bg-cover { position: absolute; inset: 0; animation: now-fade 1.4s ease both; }
+.now-bg-cover > div { width: 100%; height: 100%; background-size: cover; background-position: center; }
+.now-blob { position: absolute; border-radius: 50%; transition: --pal-a 1.6s ease, --pal-b 1.6s ease; }
+.now-blob-a { background: radial-gradient(closest-side, var(--pal-a), transparent); opacity: .35; }
+.now-blob-b { background: radial-gradient(closest-side, var(--pal-b), transparent); opacity: .32; }
+
+/* The record: grooves, the cover as its label and a hole turn; the glare over them stays put. */
+.now-disc { position: relative; width: 100%; height: 100%; border-radius: 50%; background: repeating-radial-gradient(circle at 50% 50%, #121216 0 var(--groove, 2px), #1D1D23 var(--groove, 2px) calc(var(--groove, 2px) * 2)); animation: now-spin 3.6s steps(108) infinite paused; }
+.now-disc-label { position: absolute; inset: 31%; border-radius: 50%; background-color: var(--pal-a); background-size: cover; background-position: center; box-shadow: 0 0 0 2px rgba(0, 0, 0, .4); }
+.now-disc-hole { position: absolute; inset: 48.6%; border-radius: 50%; background: #08080A; }
+.now-shine { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 8%, rgba(255, 255, 255, .10) 13%, transparent 19% 56%, rgba(255, 255, 255, .07) 62%, transparent 68%); pointer-events: none; }
+
+/* steps() per keyframe interval: 54 steps for each half of the breath. */
+.now-breathe { animation: now-breathe 3.6s steps(54) infinite paused; }
+
+.playing :is(.now-disc, .now-breathe) { animation-play-state: running; }
+
+@media (prefers-reduced-motion: reduce) {
+  .now-bg-cover, .now-blob, .now-disc, .now-breathe { animation: none !important; transition: none !important; }
+}

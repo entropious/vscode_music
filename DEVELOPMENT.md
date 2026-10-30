@@ -66,6 +66,9 @@ node .probe/service-check.js   # service: two clients, playback survives one clo
 directory (`vscode-yandex-music-service-*.sock`), joins it with an `attach`
 message (a remote without settings: the token stays as the windows set it) and
 runs the same calls as a window. A connected app keeps the service running.
+The now-playing art (blurred cover background, record, breathing cover, progress
+bar shapes, the cover's palette) is shared with the player panel:
+`media/nowArt.js` is bundled into the app, and `media/nowArt.css` is copied next to it.
 
 When no service answers, the app starts one itself (`remote/src/launch.ts`): it
 finds the newest copy of the extension in `~/.vscode/extensions` (or Insiders,
@@ -81,7 +84,7 @@ e.g. this repository after `npm run compile`.
 ```bash
 cd remote
 bun install
-bun run start      # build and open it; add -- --windowed for a window
+bun run start      # build and open it; add -- --fullscreen to open it in full screen
 bun run package    # dist/Yandex Music Remote-darwin-{arm64,x64}/Yandex Music Remote.app
 ```
 
@@ -92,7 +95,7 @@ in `/Applications`, `~/Applications` or, by its bundle ID
 `net.entro.yandex-music-remote`, through Spotlight.
 
 Without macOS and a token, run it against a stand-in service with a made-up
-queue: `bun run mock` in one terminal, `bun run start -- --windowed` in
+queue: `bun run mock` in one terminal, `bun run start` in
 another. `--socket <path>` points the app at a socket of your choice.
 
 ## Endpoint settings

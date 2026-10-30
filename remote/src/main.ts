@@ -3,7 +3,7 @@
  * attaches to the player service the VS Code extension runs on macOS (`out/service.js`) and
  * controls it the way a VS Code window does.
  *
- *   electron . [--windowed] [--socket <path>]
+ *   electron . [--fullscreen] [--socket <path>]
  */
 import * as path from 'node:path';
 import { BrowserWindow, app, ipcMain, powerSaveBlocker, shell } from 'electron';
@@ -12,7 +12,7 @@ import { ServiceLink } from './link.ts';
 import type { PlaybackStatus, RemoteMethod, SharedState } from './wire.ts';
 
 const argv = process.argv.slice(1);
-const windowed = argv.includes('--windowed');
+const fullscreen = argv.includes('--fullscreen');
 const socketArg = argv[argv.indexOf('--socket') + 1];
 const fixedSocket = argv.includes('--socket') ? socketArg : undefined;
 
@@ -66,7 +66,7 @@ function createWindow(): void {
     height: 900,
     minWidth: 720,
     minHeight: 600,
-    fullscreen: !windowed,
+    fullscreen,
     backgroundColor: '#06070A',
     title: 'Yandex Music Remote',
     titleBarStyle: 'hiddenInset',
@@ -78,6 +78,10 @@ function createWindow(): void {
       nodeIntegration: false,
     },
   });
+  // Without --fullscreen the window takes the whole screen short of the menu bar and the Dock.
+  if (!fullscreen) {
+    win.maximize();
+  }
   win.once('ready-to-show', () => win?.show());
   win.on('closed', () => (win = undefined));
   // Links never open inside the app.
@@ -103,6 +107,7 @@ ipcMain.on(CHANNEL.ready, () => {
   }
 });
 ipcMain.on(CHANNEL.fullScreen, () => win?.setFullScreen(!win.isFullScreen()));
+ipcMain.on(CHANNEL.leaveFullScreen, () => win?.setFullScreen(false));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();
