@@ -9,10 +9,11 @@
 import { type ChildProcess, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
+import * as path from 'path';
 import { YandexMusicClient, artistLine, fullTitle } from './api';
 import { type AudioOutput, type Logger, PlayerCore, REMOTE_METHODS, errorText } from './core';
 import { Broadcaster, type Message, type ServiceSettings, readMessages, send, serviceBuild } from './protocol';
-import { SLOPLESS_API, SlopChecker } from './slop';
+import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
 
 /** How long the service keeps playing with no window connected, so reloading a window doesn't stop the music. */
 const GRACE_MS = 8000;
@@ -165,12 +166,13 @@ class AvAudio implements AudioOutput {
 }
 
 let settings: ServiceSettings = { ...BUILD, apiBaseUrl: 'https://api.music.yandex.net', quality: 'high', volume: 0.7, aiLabels: true, sloplessBaseUrl: SLOPLESS_API };
-const slopChecker = new SlopChecker();
+// The log lies in the extension's global storage, next to the file of AI marks.
+const slopChecker = new SlopChecker(path.join(path.dirname(logFile), SLOP_FILE));
 const clients = new Set<net.Socket>();
 const broadcaster = new Broadcaster();
 
-function notify(text: string, error = false): void {
-  clients.forEach((c) => send(c, { type: 'notice', text, error }));
+function notify(text: string): void {
+  clients.forEach((c) => send(c, { type: 'notice', text }));
 }
 
 const audio = new AvAudio((event) => {
@@ -181,7 +183,6 @@ const audio = new AvAudio((event) => {
   } else if (event.type === 'error') {
     log.warn(`audio: ${event.message}`);
     core.audioError(event.message);
-    notify(`Yandex Music: couldn't play the track: ${event.message}`, true);
   } else if (event.type === 'remote') {
     void onRemote(event.command, event.position).catch((e) => log.warn(`media key ${event.command}: ${errorText(e)}`));
   }

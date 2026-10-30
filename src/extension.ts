@@ -22,7 +22,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const apiBaseUrl = () => config().get<string>('apiBaseUrl', 'https://api.music.yandex.net');
   const clientFactory = async () => new YandexMusicClient(apiBaseUrl(), await auth.getToken());
 
-  const player = new Player(context.extensionUri, clientFactory);
+  const player = new Player(context.extensionUri, context.globalStorageUri, clientFactory);
   let service: ServiceClient | undefined;
   let sync: PlayerSync | undefined;
   if (process.platform === 'darwin') {

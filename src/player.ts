@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { type Account, type Playlist, type Track, YandexMusicClient, artistLine, coverUrl, fullTitle } from './api';
 import { renderCard } from './card';
-import { SLOPLESS_API, SlopChecker } from './slop';
+import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
 import {
   AUDIO_METHODS,
   type AudioOutput,
@@ -37,6 +37,8 @@ interface ViewTrack {
   duration?: number;
   cover?: string;
   available: boolean;
+  liked: boolean;
+  ai: boolean;
 }
 
 /**
@@ -78,10 +80,12 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   /** The "Yandex Music" channel in the Output panel. */
   readonly log = vscode.window.createOutputChannel('Yandex Music', { log: true });
   private readonly extensionUri: vscode.Uri;
+  /** The error the user has already been notified of, so each one is shown once. */
+  private shownError?: string;
 
-  constructor(extensionUri: vscode.Uri, clientFactory: () => Promise<YandexMusicClient>) {
+  constructor(extensionUri: vscode.Uri, storageUri: vscode.Uri, clientFactory: () => Promise<YandexMusicClient>) {
     this.extensionUri = extensionUri;
-    const slopChecker = new SlopChecker();
+    const slopChecker = new SlopChecker(vscode.Uri.joinPath(storageUri, SLOP_FILE).fsPath);
     const webviewAudio: AudioOutput = {
       load: async (url, trackId, position) => {
         await this.ensureView();
@@ -135,6 +139,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       }),
       // The status bar card has its colors baked into SVG, so it must be redrawn on theme change.
       vscode.window.onDidChangeActiveColorTheme(() => this.updateStatusBar()),
+      vscode.window.onDidChangeWindowState((s) => s.focused && this.reportError()),
     );
   }
 
@@ -375,7 +380,6 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
         case 'mediaError':
           if (!this.remote) {
             this.core.audioError(m.message);
-            this.showError(this.core.lastError);
           }
           break;
         case 'needsGesture':
@@ -432,6 +436,25 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   private render(): void {
     this.pushState();
     this.updateStatusBar();
+    this.reportError();
+  }
+
+  /**
+   * The panel is rarely open, so every new error also gets a notification: errors of commands
+   * from this window come through showError, the rest (from the service, the leader window,
+   * loading the account, playback) through the shared state. Only the window the user is in
+   * shows it; if none is, the one that gets focus next does.
+   */
+  private reportError(): void {
+    const error = this.core.lastError;
+    if (!error) {
+      this.shownError = undefined;
+      return;
+    }
+    if (error !== this.shownError && vscode.window.state.focused) {
+      this.shownError = error;
+      void vscode.window.showErrorMessage(`Yandex Music: ${error}`);
+    }
   }
 
   /**
@@ -470,7 +493,16 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
 
   private viewTrack(t: Track): ViewTrack {
-    return { id: t.id, title: fullTitle(t), artists: artistLine(t), duration: t.durationMs, cover: coverUrl(t.coverUri, 200), available: t.available !== false };
+    return {
+      id: t.id,
+      title: fullTitle(t),
+      artists: artistLine(t),
+      duration: t.durationMs,
+      cover: coverUrl(t.coverUri, 200),
+      available: t.available !== false,
+      liked: this.core.liked.has(baseId(t.id)),
+      ai: this.core.slop[baseId(t.id)] === true,
+    };
   }
 
   // ---------------------------------------------------------------- status bar
@@ -558,6 +590,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
 
   showError(e: unknown): void {
     this.core.lastError = errorText(e);
+    this.shownError = this.core.lastError;
+    this.log.error(this.core.lastError);
     this.pushState();
     void vscode.window.showErrorMessage(`Yandex Music: ${this.core.lastError}`);
   }

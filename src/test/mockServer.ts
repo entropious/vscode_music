@@ -25,6 +25,7 @@ export async function startMockServer(mp3Path: string) {
   const log: string[] = [];
   /** My Vibe radio feedback as received: session ID, batch ID and the event. */
   const feedback: { sessionId: string; batchId?: string; event: any }[] = [];
+  const stalled = new Set<string>();
   let sessions = 0;
   let base = '';
 
@@ -41,6 +42,14 @@ export async function startMockServer(mp3Path: string) {
     req.on('data', (c) => (bodyText += c));
     req.on('end', () => {
       const form = new URLSearchParams(bodyText);
+      // POST /mock/stall with prefix=/users/42/likes leaves such requests unanswered, as a stalled connection does.
+      if (p === '/mock/stall') {
+        stalled.add(form.get('prefix') ?? '');
+        return json({ ok: true });
+      }
+      if ([...stalled].some((s) => p.startsWith(s))) {
+        return;
+      }
       if (p.startsWith('/get-mp3/')) {
         const [, , sign, ts, ...rest] = p.split('/');
         const path = '/' + rest.join('/');
@@ -143,5 +152,5 @@ export async function startMockServer(mp3Path: string) {
   });
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
   base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
-  return { base, log, liked, disliked, feedback, close: () => new Promise<void>((r) => server.close(() => r())) };
+  return { base, log, liked, disliked, feedback, close: () => new Promise<void>((r) => (server.close(() => r()), server.closeAllConnections())) };
 }

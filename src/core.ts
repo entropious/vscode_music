@@ -33,7 +33,10 @@ export const REMOTE_METHODS = [
 export type RemoteMethod = (typeof REMOTE_METHODS)[number];
 
 /** Methods that load or control audio; everything else only reads or changes the queue and account. */
-export const AUDIO_METHODS = new Set<RemoteMethod>(['playSource', 'playTracks', 'playIndex', 'playPause', 'next', 'previous', 'seek']);
+/** How many tracks after the current one get AI marks ahead of time, so the queue shows them. */
+const SLOP_LOOKAHEAD = 25;
+
+export const AUDIO_METHODS =new Set<RemoteMethod>(['playSource', 'playTracks', 'playIndex', 'playPause', 'next', 'previous', 'seek']);
 
 /**
  * What changed: `status` is only the playback status (position, playing, duration), which
@@ -158,6 +161,8 @@ export class PlayerCore {
   streamInfo?: string;
   audioUnlocked = false;
   slop: Record<string, boolean> = {};
+  /** Tracks being looked up on slopless.art right now. */
+  private readonly slopPending = new Set<string>();
   /** Track whose stream has been handed to the audio output; unset while My Vibe is only preloaded. */
   loadedTrackId?: string;
 
@@ -337,25 +342,37 @@ export class PlayerCore {
     this.index = 0;
     this.status = { playing: false, position: 0, duration: 0 };
     this.changed();
-    this.checkSlop(tracks[0]);
+    this.checkSlopAround(0);
   }
 
-  /** Asks slopless.art about the track in the background and marks it once the answer comes. */
-  private checkSlop(track: Track): void {
+  /**
+   * Asks slopless.art about the tracks in the background and marks them all at once when the
+   * answers come, so a list of them redraws once rather than once per track.
+   */
+  private checkSlop(tracks: Track[]): void {
     const checker = this.host.slop();
-    const id = baseId(track.id);
-    if (!checker || id in this.slop) {
+    const unknown = tracks.filter((t) => !(baseId(t.id) in this.slop) && !this.slopPending.has(baseId(t.id)));
+    if (!checker || !unknown.length) {
       return;
     }
-    void checker
-      .isAi(track)
-      .then((ai) => {
-        if (ai !== undefined) {
-          this.slop = { ...this.slop, [id]: ai };
-          this.changed();
-        }
-      })
-      .catch(() => undefined);
+    unknown.forEach((t) => this.slopPending.add(baseId(t.id)));
+    void Promise.all(unknown.map((t) => checker.isAi(t).catch(() => undefined))).then((answers) => {
+      unknown.forEach((t) => this.slopPending.delete(baseId(t.id)));
+      const found = Object.fromEntries(unknown.map((t, i) => [baseId(t.id), answers[i]]).filter(([, ai]) => ai !== undefined));
+      if (Object.keys(found).length) {
+        this.slop = { ...this.slop, ...found };
+        this.changed();
+      }
+    });
+  }
+
+  /** The current track first, on its own, so its mark doesn't wait for the rest of the batch. */
+  private checkSlopAround(index: number): void {
+    const track = this.queue[index];
+    if (track) {
+      this.checkSlop([track]);
+    }
+    this.checkSlop(this.queue.slice(index + 1, index + 1 + SLOP_LOOKAHEAD));
   }
 
   private async fetchSource(source: Source): Promise<Track[]> {
@@ -441,6 +458,7 @@ export class PlayerCore {
     const client = await this.host.client();
     this.searchResults = await client.search(query);
     this.changed();
+    this.checkSlop(this.searchResults);
     return this.searchResults;
   }
 
@@ -474,7 +492,7 @@ export class PlayerCore {
     this.streamInfo = undefined;
     this.status = { playing: false, position: 0, duration: 0, trackId: track.id };
     this.changed();
-    this.checkSlop(track);
+    this.checkSlopAround(index);
 
     const client = await this.host.client();
     const { url, preview, codec, bitrate } = await client.streamUrl(track.id, this.host.quality());

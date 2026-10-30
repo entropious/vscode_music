@@ -11,6 +11,8 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 /** How often a window that isn't connected checks whether another window has started the service. */
 const POLL_MS = 2000;
+/** Longer than a few API requests in a row, each of which gives up after 15 s on its own. */
+const CALL_TIMEOUT_MS = 45000;
 
 export interface ServicePaths {
   /** out/service.js */
@@ -169,6 +171,11 @@ export class ServiceClient implements vscode.Disposable {
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       send(socket, { type: 'call', id, method, args });
+      setTimeout(() => {
+        if (this.pending.delete(id)) {
+          reject(new Error("The player service didn't respond"));
+        }
+      }, CALL_TIMEOUT_MS);
     });
   }
 
@@ -189,7 +196,7 @@ export class ServiceClient implements vscode.Disposable {
       case 'notice':
         // Every window gets the notice; only the one the user is looking at shows it.
         if (vscode.window.state.focused) {
-          m.error ? void vscode.window.showErrorMessage(m.text) : vscode.window.setStatusBarMessage(m.text, 4000);
+          vscode.window.setStatusBarMessage(m.text, 4000);
         }
         break;
     }

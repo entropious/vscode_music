@@ -295,6 +295,45 @@ const commands = {
     }
   },
 
+  // Like from the status bar card: a real click on the track opens the card, a real click on
+  // its like tile likes the track. Reports what the status bar, the open card and the
+  // notifications show after the given number of seconds.
+  async cardlike(waitSeconds = '2.5') {
+    const result = await inWorkbench(async (s) => {
+      const click = async (rect) => {
+        const x = rect.x + rect.w / 2;
+        const y = rect.y + rect.h / 2;
+        await s.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+        await s.send('Input.dispatchMouseEvent', { type: 'mousePressed', x, y, button: 'left', clickCount: 1 });
+        await s.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x, y, button: 'left', clickCount: 1 });
+      };
+      const statusIcons = `[...document.querySelectorAll('[id="entro.vscode-yandex-music.yandexMusic.track"] .codicon')].map((i) => [...i.classList].find((c) => c.startsWith('codicon-') && c !== 'codicon'))`;
+      const likeLink = `.monaco-hover a[data-href*="yandexMusic.like"], .monaco-hover a[href*="yandexMusic.like"]`;
+      const before = await s.eval(statusIcons);
+      await click(await s.eval(rectOf('[id="entro.vscode-yandex-music.yandexMusic.track"]')));
+      const link = await until('the card', () => s.eval(rectOf(likeLink)), 5000);
+      const cardBefore = await s.eval(`document.querySelector(${JSON.stringify(likeLink)}).getAttribute('title') || document.querySelector(${JSON.stringify(likeLink)}).querySelector('img')?.alt`);
+      await click(link);
+      await sleep(Number(waitSeconds) * 1000);
+      const hover = await s.eval(`!!document.querySelector('.monaco-hover')`);
+      const cardAfter = hover ? await s.eval(`(() => { const a = document.querySelector(${JSON.stringify(likeLink)}); return a && (a.getAttribute('title') || a.querySelector('img')?.alt); })()`) : null;
+      const notifications = await s.eval(`[...document.querySelectorAll('.notifications-toasts .notification-list-item-message, .notification-toast .notification-list-item-message')].map((n) => n.textContent)`);
+      return { statusIconsBefore: before, statusIconsAfter: await s.eval(statusIcons), cardOpenAfterClick: hover, cardLikeBefore: cardBefore, cardLikeAfter: cardAfter, notifications };
+    });
+    console.log(JSON.stringify(result, null, 1));
+  },
+
+  // Notification toasts on screen, and the status bar message if there is one.
+  async toasts() {
+    const result = await inWorkbench((s) =>
+      s.eval(`({
+        toasts: [...document.querySelectorAll('.notifications-toasts .notification-list-item-message')].map((n) => n.textContent),
+        statusMessage: [...document.querySelectorAll('.statusbar-item')].map((i) => i.textContent).filter((t) => /Yandex|Liked/.test(t)),
+      })`),
+    );
+    console.log(JSON.stringify(result, null, 1));
+  },
+
   // The player's status bar items as the window shows them, codicons included.
   async statusbar() {
     const items = await inWorkbench((s) =>

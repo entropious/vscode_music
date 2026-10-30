@@ -7,7 +7,7 @@
 
   const saved = vscode.getState() || {};
   let tab = saved.tab || 'queue';
-  let searchQuery = saved.searchQuery || '';
+  let searchQuery = '';
   /** @type {any} */
   let state = { signedOut: false, account: null, current: null, queue: [], index: -1, playlists: [], searchResults: [], source: '', liked: false, error: null };
   let currentTrackId = null;
@@ -81,7 +81,10 @@
     const eq = current ? '<span class="eq"><i></i><i></i><i></i></span>' : '';
     const img = t.cover ? `<img src="${esc(t.cover)}" alt="">` : I.note;
     const d = t.duration ? fmt(t.duration / 1000) : '';
-    return `<li data-i="${i}" class="${current ? 'current' : ''} ${t.available ? '' : 'na'}"><span class="thumb">${img}${eq}</span><div class="t"><div>${esc(t.title)}</div><div class="a">${esc(t.artists)}</div></div><span class="d">${d}</span></li>`;
+    const ai = t.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : '';
+    const liked = t.liked ? `<span class="liked" title="In Liked">${I.heartOn}</span>` : '';
+    const marks = ai || liked ? `<span class="marks">${ai}${liked}</span>` : '';
+    return `<li data-i="${i}" class="${current ? 'current' : ''} ${t.available ? '' : 'na'}"><span class="thumb">${img}${eq}</span><div class="t"><div>${esc(t.title)}</div><div class="a">${esc(t.artists)}</div></div>${marks}<span class="d">${d}</span></li>`;
   }
 
   function signInView() {
@@ -278,7 +281,7 @@
       cmd(el.dataset.cmd);
     } else if (el.dataset.tab) {
       tab = el.dataset.tab;
-      vscode.setState({ tab, searchQuery });
+      vscode.setState({ tab });
       if (tab === 'playlists' && !state.playlists.length && state.account) vscode.postMessage({ type: 'loadPlaylists' });
       render();
     } else if (el.tagName === 'LI') {
@@ -297,7 +300,6 @@
     const q = /** @type {HTMLInputElement} */ (document.getElementById('q')).value.trim();
     if (!q) return;
     searchQuery = q;
-    vscode.setState({ tab, searchQuery });
     vscode.postMessage({ type: 'search', query: q });
   });
 

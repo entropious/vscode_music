@@ -75,6 +75,8 @@ export class ApiError extends Error {
 
 export type Fetch = typeof fetch;
 
+const REQUEST_TIMEOUT_MS = 15000;
+
 export class YandexMusicClient {
   constructor(
     private readonly baseUrl: string,
@@ -97,6 +99,20 @@ export class YandexMusicClient {
     return h;
   }
 
+  /** A request that fails instead of hanging: a stalled connection gives up after REQUEST_TIMEOUT_MS, body included. */
+  private async fetchText(url: string, init: RequestInit): Promise<{ res: Response; text: string }> {
+    try {
+      const res = await this.fetchImpl(url, { ...init, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      return { res, text: await res.text() };
+    } catch (e) {
+      if (e instanceof Error && e.name === 'TimeoutError') {
+        throw new ApiError(`the server didn't respond within ${REQUEST_TIMEOUT_MS / 1000} s`, 0);
+      }
+      const cause = e instanceof Error && e.cause instanceof Error ? e.cause.message : e instanceof Error ? e.message : String(e);
+      throw new ApiError(`can't reach the server: ${cause}`, 0);
+    }
+  }
+
   private async request<T>(path: string, init: { method?: string; form?: Record<string, string>; json?: unknown } = {}): Promise<T> {
     const url = path.startsWith('http') ? path : `${this.baseUrl.replace(/\/$/, '')}${path}`;
     const headers = this.headers();
@@ -108,8 +124,7 @@ export class YandexMusicClient {
       headers['Content-Type'] = 'application/json';
       body = JSON.stringify(init.json);
     }
-    const res = await this.fetchImpl(url, { method: init.method ?? (body ? 'POST' : 'GET'), headers, body });
-    const text = await res.text();
+    const { res, text } = await this.fetchText(url, { method: init.method ?? (body ? 'POST' : 'GET'), headers, body });
     let json: any;
     try {
       json = JSON.parse(text);
@@ -246,11 +261,11 @@ export class YandexMusicClient {
     pool.sort((a, b) => (quality === 'high' ? b.bitrateInKbps - a.bitrateInKbps : a.bitrateInKbps - b.bitrateInKbps));
     const info = pool[0];
     const sep = info.downloadInfoUrl.includes('?') ? '&' : '?';
-    const res = await this.fetchImpl(`${info.downloadInfoUrl}${sep}format=json`, { headers: this.headers() });
+    const { res, text } = await this.fetchText(`${info.downloadInfoUrl}${sep}format=json`, { headers: this.headers() });
     if (!res.ok) {
       throw new ApiError(explainError(res.status, res.statusText), res.status);
     }
-    const d = (await res.json()) as { host: string; path: string; ts: string; s: string };
+    const d = JSON.parse(text) as { host: string; path: string; ts: string; s: string };
     return { url: buildDirectLink(d), preview: !!info.preview, codec: info.codec, bitrate: info.bitrateInKbps };
   }
 }

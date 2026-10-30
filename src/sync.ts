@@ -12,7 +12,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * panel, so a remote runs these itself, after taking over as leader, if audio is unlocked
  * here or isn't unlocked in the leader window either (see Player.shouldPlayHere).
  */
-const STARTS_PLAYBACK = new Set<RemoteMethod>(['playSource', 'playTracks', 'playIndex', 'next', 'previous']);
+/** Longer than a few API requests in a row, each of which gives up after 15 s on its own. */
+const CALL_TIMEOUT_MS = 45000;
+const STARTS_PLAYBACK =new Set<RemoteMethod>(['playSource', 'playTracks', 'playIndex', 'next', 'previous']);
 
 /**
  * Keeps the player in sync across VS Code windows where there is no player service (Windows,
@@ -208,6 +210,11 @@ export class PlayerSync implements vscode.Disposable {
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve, reject });
       send(leader, { type: 'call', id, method, args });
+      setTimeout(() => {
+        if (this.pending.delete(id)) {
+          reject(new Error("The window that is playing music didn't respond"));
+        }
+      }, CALL_TIMEOUT_MS);
     });
   }
 

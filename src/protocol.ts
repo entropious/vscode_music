@@ -38,7 +38,7 @@ export type Message =
   /** The window that started the service hands over its queue; the service takes it if it has none. */
   | { type: 'adopt'; state: SharedState; status: PlaybackStatus }
   /** The service passes a message on to the windows, shown by the focused one. */
-  | { type: 'notice'; text: string; error?: boolean };
+  | { type: 'notice'; text: string };
 
 /** Fingerprint of the service and audio helper files, so a window can tell a service of another build. */
 export function serviceBuild(files: string[]): { build: string; builtAt: number } {

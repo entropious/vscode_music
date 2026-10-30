@@ -144,7 +144,7 @@ reloadwindow)
 	echo "window did not come back within 30 s"; exit 1
 	;;
 
-targets|palette|type|panel|width|shot|measure|progress|throttle|card|statusbar|playclicks|listclicks|open|layout)
+targets|palette|type|panel|width|shot|measure|progress|throttle|card|cardlike|toasts|statusbar|playclicks|listclicks|open|layout)
 	"${CHECK[@]}" "$@"
 	;;
 

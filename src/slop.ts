@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import type { Track } from './api';
 
 /**
@@ -7,8 +9,12 @@ import type { Track } from './api';
  */
 
 export const SLOPLESS_API = 'https://slopless.art/api';
+/** The file in the extension's global storage that keeps confirmed AI answers. */
+export const SLOP_FILE = 'ai-marks.json';
 /** How long an answer stays cached; the scores change rarely. */
 const TTL_MS = 60 * 60 * 1000;
+/** A confirmed AI mark hardly ever goes away, so it is kept longer. */
+const AI_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const MAX_ENTRIES = 2000;
 
 interface ArtistScore {
@@ -38,29 +44,53 @@ function trackIsAi(t: TrackScore): boolean {
   return byModel || byYandex;
 }
 
-export class SlopChecker {
-  private readonly cache = new Map<string, { at: number; value: Promise<any | null> }>();
-  private readonly fetchImpl: typeof fetch;
-  /** The yandexMusic.sloplessBaseUrl setting; changing it drops cached answers. */
-  private baseUrl = SLOPLESS_API;
+/** Confirmed AI answers on disk, by request URL. */
+type SavedAnswers = Record<string, { at: number; answer: unknown }>;
 
-  constructor(fetchImpl: typeof fetch = fetch) {
+function readSaved(file: string): SavedAnswers {
+  try {
+    const saved = JSON.parse(fs.readFileSync(file, 'utf8'));
+    return saved && typeof saved === 'object' ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+export class SlopChecker {
+  /** Answers by request URL, so answers from different slopless.art endpoints never mix. */
+  private readonly cache = new Map<string, { at: number; ttl: number; value: Promise<any | null> }>();
+  private readonly fetchImpl: typeof fetch;
+  /** The yandexMusic.sloplessBaseUrl setting. */
+  private baseUrl = SLOPLESS_API;
+  /**
+   * Confirmed AI answers are also kept in this file, so they outlive the process. The service
+   * and the windows share it: each write merges into what is already there.
+   */
+  private readonly file: string | undefined;
+  private saving = Promise.resolve();
+
+  constructor(file?: string, fetchImpl: typeof fetch = fetch) {
+    this.file = file;
     this.fetchImpl = fetchImpl;
+    if (file) {
+      const now = Date.now();
+      for (const [url, { at, answer }] of Object.entries(readSaved(file))) {
+        if (now - at < AI_TTL_MS) {
+          this.cache.set(url, { at, ttl: AI_TTL_MS, value: Promise.resolve(answer) });
+        }
+      }
+    }
   }
 
   set base(url: string) {
-    const normalized = url.replace(/\/$/, '');
-    if (normalized !== this.baseUrl) {
-      this.baseUrl = normalized;
-      this.cache.clear();
-    }
+    this.baseUrl = url.replace(/\/$/, '');
   }
 
   /** `true` or `false` once slopless.art has answered; `undefined` if it knows nothing or is unreachable. */
   async isAi(track: Track): Promise<boolean | undefined> {
     const [score, ...artists] = await Promise.all([
-      this.get<TrackScore>(`track/${track.id.split(':')[0]}`),
-      ...track.artists.map((a) => this.get<ArtistScore>(`artist/${a.id}`)),
+      this.get<TrackScore>(`track/${track.id.split(':')[0]}`, trackIsAi),
+      ...track.artists.map((a) => this.get<ArtistScore>(`artist/${a.id}`, artistIsAi)),
     ]);
     const known = artists.filter((a): a is ArtistScore => !!a);
     if (!score && !known.length) {
@@ -69,19 +99,48 @@ export class SlopChecker {
     return (!!score && trackIsAi(score)) || known.some(artistIsAi);
   }
 
-  private get<T>(path: string): Promise<T | null> {
+  private get<T>(path: string, isAi: (answer: T) => boolean): Promise<T | null> {
+    const url = `${this.baseUrl}/${path}`;
     const now = Date.now();
-    const hit = this.cache.get(path);
-    if (hit && now - hit.at < TTL_MS) {
+    const hit = this.cache.get(url);
+    if (hit && now - hit.at < hit.ttl) {
       return hit.value;
     }
     if (this.cache.size >= MAX_ENTRIES) {
       this.cache.delete(this.cache.keys().next().value!);
     }
-    const value = this.fetchImpl(`${this.baseUrl}/${path}`)
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null);
-    this.cache.set(path, { at: now, value });
-    return value;
+    const entry: { at: number; ttl: number; value: Promise<T | null> } = { at: now, ttl: TTL_MS, value: Promise.resolve(null) };
+    entry.value = this.fetchImpl(url)
+      .then((r): Promise<T> | null => (r.ok ? r.json() : null))
+      .catch(() => null)
+      .then((answer) => {
+        if (answer && isAi(answer)) {
+          entry.ttl = AI_TTL_MS;
+          this.save(url, now, answer);
+        }
+        return answer;
+      });
+    this.cache.set(url, entry);
+    return entry.value;
+  }
+
+  /** Adds the answer to the file; writes go one at a time and drop answers that have expired. */
+  private save(url: string, at: number, answer: unknown): void {
+    const file = this.file;
+    if (!file) {
+      return;
+    }
+    this.saving = this.saving
+      .then(async () => {
+        const now = Date.now();
+        const saved = readSaved(file);
+        saved[url] = { at, answer };
+        const fresh = Object.fromEntries(Object.entries(saved).filter(([, s]) => now - s.at < AI_TTL_MS));
+        await fs.promises.mkdir(path.dirname(file), { recursive: true });
+        const tmp = `${file}.${process.pid}.tmp`;
+        await fs.promises.writeFile(tmp, JSON.stringify(fresh));
+        await fs.promises.rename(tmp, file);
+      })
+      .catch(() => undefined);
   }
 }

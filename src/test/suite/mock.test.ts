@@ -73,6 +73,13 @@ suite('Yandex Music: logic against the mock API', function () {
     }
   });
 
+  test('tracks further down the queue get their AI marks before they play', async () => {
+    const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
+    await waitFor('the AI mark for Test Track 2', async () => api.player.core.slop['1002'] === true);
+    assert.strictEqual(api.player.core.slop['1003'], false);
+    assert.strictEqual((await status()).index, 0);
+  });
+
   test('on macOS the music plays in the background service, not in the window', async function () {
     if (process.platform !== 'darwin') {
       this.skip();
