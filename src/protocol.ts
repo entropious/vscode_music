@@ -5,13 +5,29 @@ import * as os from 'os';
 import * as path from 'path';
 import type { PlaybackStatus, RemoteMethod, SharedState } from './core';
 
+/**
+ * Version of the messages between windows and the service. A service serves any window that
+ * speaks the same version, whatever its build, so a window not reloaded after an update keeps
+ * working; it is bumped only when a message changes in a way older code can't handle.
+ */
+export const PROTOCOL = 2;
+
+/** A window too old for the running service: it must be reloaded to control the music again. */
+export class OutdatedWindowError extends Error {
+  constructor() {
+    super('Yandex Music was updated. Reload this window (Developer: Reload Window) to control the music from it.');
+  }
+}
+
 /** Settings a window passes to the macOS player service. */
 export interface ServiceSettings {
+  protocol: number;
   /** The window's serviceBuild(). */
   build: string;
   /**
-   * When the window's service files were written. A service of another build exits if the
-   * window's files are newer (the extension was updated) and turns the window away if older.
+   * When the window's service files were written. A service of an older build exits when a
+   * window with newer files connects (the extension was updated), so that window starts the
+   * new one; the other windows then reconnect to it.
    */
   builtAt: number;
   token?: string;
@@ -33,8 +49,10 @@ export type Message =
   | { type: 'handover' }
   /** A window tells the service its token and settings, on connect and whenever they change. */
   | { type: 'hello'; settings: ServiceSettings }
-  /** The service accepted the window's first hello: same build, the window is now its remote. */
+  /** The service accepted the window's first hello: the window is now its remote. */
   | { type: 'welcome' }
+  /** The service turned the window away: it speaks an older protocol and must be reloaded. */
+  | { type: 'outdated' }
   /** The window that started the service hands over its queue; the service takes it if it has none. */
   | { type: 'adopt'; state: SharedState; status: PlaybackStatus }
   /** The service passes a message on to the windows, shown by the focused one. */

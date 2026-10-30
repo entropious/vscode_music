@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import { type Station, Track, YandexMusicClient, artistLine, fullTitle } from './api';
 import { Auth } from './auth';
 import { Player } from './player';
-import { serviceBuild, socketPathFor } from './protocol';
+import { PROTOCOL, serviceBuild, socketPathFor } from './protocol';
 import { ServiceClient } from './serviceClient';
 import { SLOPLESS_API } from './slop';
 import { PlayerSync } from './sync';
@@ -34,6 +34,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
       socketPathFor(context.globalStorageUri.fsPath, 'service'),
       { script, helper, log: vscode.Uri.joinPath(context.globalStorageUri, 'service.log').fsPath },
       async () => ({
+        protocol: PROTOCOL,
         ...build,
         token: await auth.getToken(),
         apiBaseUrl: apiBaseUrl(),

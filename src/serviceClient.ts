@@ -5,7 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import type { RemoteMethod } from './core';
 import type { Player } from './player';
-import { type Message, type ServiceSettings, readMessages, send } from './protocol';
+import { type Message, OutdatedWindowError, type ServiceSettings, readMessages, send } from './protocol';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -34,6 +34,8 @@ export class ServiceClient implements vscode.Disposable {
   private starting?: Promise<void>;
   private poll?: NodeJS.Timeout;
   private disposed = false;
+  /** The running service speaks a newer protocol; this window must be reloaded. */
+  private outdated = false;
   private readonly player: Player;
   private readonly socketPath: string;
   private readonly paths: ServicePaths;
@@ -54,7 +56,7 @@ export class ServiceClient implements vscode.Disposable {
   async start(): Promise<void> {
     await this.connect(false);
     this.poll = setInterval(() => {
-      if (!this.socket && !this.starting && !this.disposed) {
+      if (!this.socket && !this.starting && !this.disposed && !this.outdated) {
         void this.connect(false);
       }
     }, POLL_MS);
@@ -84,11 +86,17 @@ export class ServiceClient implements vscode.Disposable {
   }
 
   private async launch(): Promise<void> {
-    if (await this.connect(true)) {
+    if (this.outdated) {
+      throw new OutdatedWindowError();
+    }
+    const found = await this.connect(true);
+    if (found === 'outdated') {
+      throw new OutdatedWindowError();
+    }
+    if (found === 'connected') {
       return;
     }
-    // No service of this build answered: the socket file is either left over from one that
-    // crashed or belongs to an older build, which exits on its own once no window is connected.
+    // No service answered: the socket file is left over from one that crashed.
     await fs.promises.unlink(this.socketPath).catch(() => undefined);
     await fs.promises.mkdir(path.dirname(this.paths.log), { recursive: true });
     const child = spawn(process.execPath, [this.paths.script, this.socketPath, this.paths.helper, this.paths.log], {
@@ -100,7 +108,11 @@ export class ServiceClient implements vscode.Disposable {
     this.player.log.info(`Service: started, pid ${child.pid}; its log is ${this.paths.log}`);
     for (let i = 0; i < 50; i++) {
       await sleep(100);
-      if (await this.connect(true)) {
+      const result = await this.connect(true);
+      if (result === 'outdated') {
+        throw new OutdatedWindowError();
+      }
+      if (result === 'connected') {
         return;
       }
     }
@@ -109,12 +121,13 @@ export class ServiceClient implements vscode.Disposable {
 
   /**
    * Connects to the service. The connection counts only once the service welcomes this window's
-   * hello; a service of another build doesn't, and is then treated as absent. With `adopt`, hands
-   * over this window's queue, which the service takes only if it has none of its own yet.
+   * hello; a service that speaks a newer protocol answers `outdated` instead, and this window
+   * then asks to be reloaded. With `adopt`, hands over this window's queue, which the service
+   * takes only if it has none of its own yet.
    */
-  private async connect(adopt: boolean): Promise<boolean> {
+  private async connect(adopt: boolean): Promise<'connected' | 'absent' | 'outdated'> {
     if (this.socket) {
-      return true;
+      return 'connected';
     }
     const settings = await this.settings();
     return new Promise((resolve) => {
@@ -127,7 +140,7 @@ export class ServiceClient implements vscode.Disposable {
           settled = true;
           clearTimeout(timer);
           socket.destroy();
-          resolve(false);
+          resolve('absent');
         }
       };
       const timer = setTimeout(fail, 2000);
@@ -139,6 +152,14 @@ export class ServiceClient implements vscode.Disposable {
           this.onMessage(m);
           return;
         }
+        if (m.type === 'outdated') {
+          settled = true;
+          clearTimeout(timer);
+          socket.destroy();
+          this.markOutdated();
+          resolve('outdated');
+          return;
+        }
         if (m.type !== 'welcome') {
           early.push(m);
           return;
@@ -147,7 +168,7 @@ export class ServiceClient implements vscode.Disposable {
         clearTimeout(timer);
         if (this.socket || this.disposed) {
           socket.destroy();
-          resolve(!!this.socket);
+          resolve(this.socket ? 'connected' : 'absent');
           return;
         }
         if (adopt) {
@@ -157,7 +178,7 @@ export class ServiceClient implements vscode.Disposable {
         this.player.setRemote({ call: (method, args) => this.call(method, args) });
         early.forEach((e) => this.onMessage(e));
         this.player.log.info('Service: connected; the music plays in the background service');
-        resolve(true);
+        resolve('connected');
       });
     });
   }
@@ -200,6 +221,20 @@ export class ServiceClient implements vscode.Disposable {
         }
         break;
     }
+  }
+
+  /** Stops trying the service and offers to reload the window, once. */
+  private markOutdated(): void {
+    if (this.outdated) {
+      return;
+    }
+    this.outdated = true;
+    this.player.log.warn('Service: the running player service is newer than this window; reload the window');
+    void vscode.window.showWarningMessage(new OutdatedWindowError().message, 'Reload Window').then((choice) => {
+      if (choice) {
+        void vscode.commands.executeCommand('workbench.action.reloadWindow');
+      }
+    });
   }
 
   private onClosed(socket: net.Socket): void {

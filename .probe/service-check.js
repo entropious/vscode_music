@@ -8,7 +8,7 @@ const net = require('net');
 const os = require('os');
 const path = require('path');
 const { MOCK_TOKEN, startMockServer } = require('../out/test/mockServer.js');
-const { serviceBuild } = require('../out/protocol.js');
+const { PROTOCOL, serviceBuild } = require('../out/protocol.js');
 
 const root = path.join(__dirname, '..');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -31,6 +31,7 @@ function client(settings) {
       if (m.type === 'notice') c.notices.push(m.text);
       if (m.type === 'result') c.pending.get(m.id)?.(m);
       if (m.type === 'welcome') c.welcomed?.();
+      if (m.type === 'outdated') c.outdated = true;
     }
   });
   const write = (m) => socket.write(JSON.stringify(m) + '\n');
@@ -64,7 +65,7 @@ async function until(fn, ms = 10000) {
   fs.rmSync(logFile, { force: true });
   const server = await startMockServer(path.join(root, 'test-fixtures/tone.mp3'));
   const build = serviceBuild([path.join(root, 'out/service.js'), path.join(root, 'helper/avplayer.js')]);
-  const settings = { ...build, token: MOCK_TOKEN, apiBaseUrl: server.base, quality: 'high', volume: 0, aiLabels: false };
+  const settings = { protocol: PROTOCOL, ...build, token: MOCK_TOKEN, apiBaseUrl: server.base, quality: 'high', volume: 0, aiLabels: false };
   const service = spawn(process.execPath, [path.join(root, 'out/service.js'), socketPath, path.join(root, 'helper/avplayer.js'), logFile], { stdio: 'ignore' });
   const checks = {};
   await until(() => fs.existsSync(socketPath), 5000);
@@ -79,15 +80,21 @@ async function until(fn, ms = 10000) {
   await b.ready;
   checks.secondWindowSeesQueue = await until(() => b.state?.queue?.length > 0 && b.state.index === a.state.index);
 
-  // A window not reloaded since an update runs an older build: turned away, the music goes on.
-  const old = client({ ...settings, build: 'older-build', builtAt: 0 });
-  const oldResult = await Promise.race([
-    old.ready.then(() => 'welcomed'),
-    new Promise((r) => old.socket.once('close', () => r('turned away'))),
-    sleep(3000).then(() => 'no answer'),
-  ]);
-  checks.olderWindowTurnedAway = oldResult === 'turned away';
-  checks.keepsRunningAfterOlderWindow = service.exitCode === null && !!b.status?.playing;
+  // Windows not reloaded since an update run an older build. One that speaks the same protocol
+  // is served; one of an older protocol is told it's outdated. The music goes on either way.
+  const answer = (c) =>
+    Promise.race([
+      c.ready.then(() => 'welcomed'),
+      new Promise((r) => c.socket.once('close', () => r(c.outdated ? 'outdated' : 'closed'))),
+      sleep(3000).then(() => 'no answer'),
+    ]);
+  const older = client({ ...settings, build: 'older-build', builtAt: 0 });
+  checks.olderBuildServed = (await answer(older)) === 'welcomed';
+  checks.olderBuildSeesQueue = await until(() => older.state?.queue?.length > 0);
+  const oldProtocol = client({ ...settings, protocol: 1, build: 'older-build', builtAt: 0 });
+  checks.olderProtocolOutdated = (await answer(oldProtocol)) === 'outdated';
+  checks.keepsRunningAfterOlderWindows = service.exitCode === null && !!b.status?.playing;
+  older.socket.destroy();
 
   a.socket.destroy();
   const before = b.status?.position ?? 0;

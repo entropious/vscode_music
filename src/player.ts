@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { type Account, type Playlist, type Track, YandexMusicClient, artistLine, coverUrl, fullTitle } from './api';
 import { renderCard } from './card';
+import { OutdatedWindowError } from './protocol';
 import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
 import {
   AUDIO_METHODS,
@@ -165,6 +166,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       try {
         await this.startService();
       } catch (e) {
+        if (e instanceof OutdatedWindowError) {
+          throw e;
+        }
         this.log.warn(`Service: couldn't start, playing in this window: ${errorText(e)}`);
       }
     }

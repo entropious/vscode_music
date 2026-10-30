@@ -12,7 +12,7 @@ import * as net from 'net';
 import * as path from 'path';
 import { YandexMusicClient, artistLine, fullTitle } from './api';
 import { type AudioOutput, type Logger, PlayerCore, REMOTE_METHODS, errorText } from './core';
-import { Broadcaster, type Message, type ServiceSettings, readMessages, send, serviceBuild } from './protocol';
+import { Broadcaster, type Message, PROTOCOL, type ServiceSettings, readMessages, send, serviceBuild } from './protocol';
 import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
 
 /** How long the service keeps playing with no window connected, so reloading a window doesn't stop the music. */
@@ -165,7 +165,7 @@ class AvAudio implements AudioOutput {
   }
 }
 
-let settings: ServiceSettings = { ...BUILD, apiBaseUrl: 'https://api.music.yandex.net', quality: 'high', volume: 0.7, aiLabels: true, sloplessBaseUrl: SLOPLESS_API };
+let settings: ServiceSettings = { protocol: PROTOCOL, ...BUILD, apiBaseUrl: 'https://api.music.yandex.net', quality: 'high', volume: 0.7, aiLabels: true, sloplessBaseUrl: SLOPLESS_API };
 // The log lies in the extension's global storage, next to the file of AI marks.
 const slopChecker = new SlopChecker(path.join(path.dirname(logFile), SLOP_FILE));
 const clients = new Set<net.Socket>();
@@ -251,15 +251,18 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
   }
   switch (m.type) {
     case 'hello': {
-      if (m.settings.build !== BUILD.build) {
-        if ((m.settings.builtAt ?? 0) > BUILD.builtAt) {
-          // The extension was updated; this service is left over from the previous build.
-          log.info(`service: a window runs the newer build ${m.settings.build}, this is ${BUILD.build}; exiting so it can start its own`);
-          shutdown('replaced by a newer build');
-        } else {
-          // A window not reloaded since the update; it plays on its own until it is.
-          socket.end();
-        }
+      if (m.settings.build !== BUILD.build && (m.settings.builtAt ?? 0) > BUILD.builtAt) {
+        // The extension was updated; this service is left over from the previous build. The other
+        // windows reconnect to the one the newer window starts.
+        log.info(`service: a window runs the newer build ${m.settings.build}, this is ${BUILD.build}; exiting so it can start its own`);
+        shutdown('replaced by a newer build');
+        return;
+      }
+      if ((m.settings.protocol ?? 1) !== PROTOCOL) {
+        // A window not reloaded since an update that changed the protocol.
+        log.info(`service: turned away a window of protocol ${m.settings.protocol ?? 1}, this is ${PROTOCOL}`);
+        send(socket, { type: 'outdated' });
+        socket.end();
         return;
       }
       if (!clients.has(socket)) {
@@ -307,7 +310,7 @@ const server = net.createServer((socket) => {
     }
     log.info(`service: window disconnected (${clients.size} left)`);
     if (!clients.size) {
-      shutdownTimer = setTimeout(() => shutdown('all windows closed'), GRACE_MS);
+      shutdownTimer = setTimeout(() => shutdown('no window connected'), GRACE_MS);
     }
   });
   readMessages(socket, (m) => void execute(socket, m));
