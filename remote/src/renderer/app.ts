@@ -1,6 +1,6 @@
 import type { Bridge, LinkState } from '../bridge.ts';
 import { type PlaybackStatus, type RemoteMethod, type RemoteMethods, type SharedState, type Source, type Track, artistLine, baseId, coverUrl, fullTitle } from '../wire.ts';
-import { CoverLayers, DEFAULT_PALETTE, type Palette, alignNewAnimations, alignToFrames, barHeights, paletteOf } from '../../../media/nowArt.js';
+import { CoverLayers, DEFAULT_PALETTE, type Palette, alignNewAnimations, alignToFrames, barHeights, paletteOf, preloadCover, recordOut, showCover } from '../../../media/nowArt.js';
 
 declare global {
   interface Window {
@@ -92,6 +92,7 @@ function sourceLabel(source: Source | undefined): string {
 
 const root = el('root');
 const bgCovers = new CoverLayers(el('bgArt'));
+const showRecord = recordOut(root);
 const cover = el('cover');
 const coverWrap = el('coverWrap');
 const vinylLabel = el('vinylLabel');
@@ -236,8 +237,7 @@ function showTrack(t: Track | undefined): void {
     replay(heading, 'pop');
   }
   const big = coverUrl(t?.coverUri, 800);
-  cover.style.backgroundImage = big ? `url("${big}")` : '';
-  cover.classList.toggle('empty', !big);
+  showCover(cover, big);
   const label = coverUrl(t?.coverUri, 200);
   vinylLabel.style.backgroundImage = label ? `url("${label}")` : '';
   bgCovers.show(coverUrl(t?.coverUri, 400));
@@ -313,6 +313,7 @@ function renderNow(): void {
   const t = current();
   showTrack(t);
   const playing = status.playing && !!t;
+  showRecord(playing);
   if (root.classList.contains('playing') !== playing) {
     root.classList.toggle('playing', playing);
     // Resumed animations start anew, off the 30 Hz grid.
@@ -336,6 +337,7 @@ function renderNow(): void {
   const next = state && t ? state.queue[state.index + 1] : undefined;
   setHidden(upNext, !next);
   if (next) {
+    preloadCover(coverUrl(next.coverUri, 800));
     const art = coverUrl(next.coverUri, 100);
     el('nextArt').style.backgroundImage = art ? `url("${art}")` : '';
     setText(el('nextTitle'), fullTitle(next));

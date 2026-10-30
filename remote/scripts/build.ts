@@ -35,7 +35,9 @@ for (const file of ['index.html', 'style.css']) {
   await Bun.write(path.join(out, 'renderer', file), Bun.file(path.join(root, 'src/renderer', file)));
 }
 // The now-playing art is shared with the extension's player panel; its script is bundled into app.js.
-await Bun.write(path.join(out, 'renderer/nowArt.css'), Bun.file(path.join(root, '../media/nowArt.css')));
+for (const file of ['nowArt.css', 'cover-empty.svg', 'cover-loading.svg']) {
+  await Bun.write(path.join(out, 'renderer', file), Bun.file(path.join(root, '../media', file)));
+}
 const fonts = [
   ...[400, 500, 600, 700].flatMap((w) => ['cyrillic', 'latin'].map((s) => `@fontsource/ibm-plex-sans/files/ibm-plex-sans-${s}-${w}-normal.woff2`)),
   ...['cyrillic', 'latin'].map((s) => `@fontsource/jetbrains-mono/files/jetbrains-mono-${s}-400-normal.woff2`),

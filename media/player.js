@@ -1,5 +1,5 @@
 // @ts-check
-import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, paletteOf } from './nowArt.js';
+import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, paletteOf, preloadCover, recordOut, showCover } from './nowArt.js';
 
 (function () {
   // @ts-ignore
@@ -104,7 +104,7 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     const vol = Math.round(audio.volume * 100);
     const head = cur
       ? `<div class="head">
-          <div class="art"><div class="vinyl"><div class="now-disc disc" id="disc"><div class="now-disc-label" id="vinylLabel"></div><div class="now-disc-hole"></div></div><div class="now-shine"></div></div>${cur.cover ? `<img class="cover now-breathe" src="${esc(cur.cover)}" alt="">` : `<div class="cover now-breathe">${I.note}</div>`}</div>
+          <div class="art"><div class="vinyl"><div class="now-disc disc" id="disc"><div class="now-disc-label" id="vinylLabel"></div><div class="now-disc-hole"></div></div><div class="now-shine"></div></div><div class="cover now-cover now-breathe" id="cover"></div></div>
           <div class="meta">
             ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^(My Vibe|Station|Radio)/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
             <div class="title" title="${esc(cur.title)}">${esc(cur.title)}</div>
@@ -155,6 +155,9 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
         <ul class="list" id="results">${s.searchResults.map((t, i) => trackRow(t, i, !!cur && t.id === cur.id)).join('')}</ul>`;
     }
 
+    // The cover tile outlives the rebuilt card, so that it keeps its image (showCover swaps it)
+    // and its breathing goes on.
+    const oldCover = document.getElementById('cover');
     app.innerHTML = `
       ${needsGesture ? `<button class="gesture" id="gesture">${I.play} Enable sound</button>` : ''}
       ${acc}
@@ -170,6 +173,8 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
         <button data-tab="search" class="${tab === 'search' ? 'active' : ''}">Search</button>
       </div>
       ${body}`;
+    const newCover = document.getElementById('cover');
+    if (oldCover && newCover) newCover.replaceWith(oldCover);
     // The panel's CSP forbids inline styles in markup, so sizes are set through the DOM.
     const heights = barHeights(cur ? String(cur.id) : '', BARS);
     document.querySelectorAll('#bars i').forEach((b, i) => {
@@ -191,6 +196,7 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
   // slow drift and the cross-fade between covers aren't restarted; it follows the card's box.
   const nowBg = /** @type {HTMLElement} */ (document.getElementById('nowBg'));
   const coverLayers = new CoverLayers(/** @type {HTMLElement} */ (document.getElementById('artLayers')));
+  const showRecord = recordOut(document.body);
   let artTrackId = null;
   let artCover = null;
   const cardObserver = new ResizeObserver(() => placeBg());
@@ -210,6 +216,10 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     if (card) cardObserver.observe(card);
     const label = document.getElementById('vinylLabel');
     if (label && cur && cur.cover) label.style.backgroundImage = `url("${cur.cover}")`;
+    const coverEl = document.getElementById('cover');
+    if (coverEl) showCover(coverEl, cur && cur.cover);
+    const next = state.queue[state.index + 1];
+    preloadCover(next && next.cover);
     const id = cur ? cur.id : null;
     if (id !== artTrackId) {
       const first = artTrackId === null;
@@ -284,6 +294,7 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     if (seek && !seeking) seek.value = String(Math.round(frac * 1000));
     paintBars();
     trackTurn();
+    showRecord(isPlaying());
     if (document.body.classList.contains('playing') !== isPlaying()) {
       document.body.classList.toggle('playing', isPlaying());
       // Resumed animations start anew, off the 30 Hz grid.

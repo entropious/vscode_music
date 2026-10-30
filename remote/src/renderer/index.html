@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src https: data:">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' https: data:">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Yandex Music Remote</title>
 <link rel="stylesheet" href="nowArt.css">
@@ -58,9 +58,7 @@
             <div class="now-shine"></div>
           </div>
           <div class="cover-wrap m" id="coverWrap">
-            <div class="cover now-breathe" id="cover">
-              <svg class="cover-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><path d="M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/><path d="M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/></svg>
-            </div>
+            <div class="cover now-cover now-breathe" id="cover"></div>
           </div>
         </div>
 

@@ -85,7 +85,10 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const openRemote = async () => {
     await findRemote();
     const app = remoteApp;
-    const opened = app && (await new Promise<boolean>((resolve) => execFile('open', [app], (err) => resolve(!err))));
+    // `open` passes its environment on to the app, and VS Code's ELECTRON_RUN_AS_NODE would start
+    // the app's Electron as plain Node, which quits at once.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('ELECTRON_')));
+    const opened = app && (await new Promise<boolean>((resolve) => execFile('open', [app], { env }, (err) => resolve(!err))));
     if (!opened) {
       const how = 'How to Install';
       if ((await vscode.window.showWarningMessage('Yandex Music Remote is not installed. It is a fullscreen macOS app for the big screen that controls this player.', how)) === how) {

@@ -32,6 +32,11 @@
 .now-disc-hole { position: absolute; inset: 48.6%; border-radius: 50%; background: #08080A; }
 .now-shine { position: absolute; inset: 0; border-radius: 50%; background: conic-gradient(from 20deg, transparent 0 8%, rgba(255, 255, 255, .10) 13%, transparent 19% 56%, rgba(255, 255, 255, .07) 62%, transparent 68%); pointer-events: none; }
 
+/* The cover tile (showCover in nowArt.js), with placeholders while it loads and when there is none. */
+.now-cover { background-size: cover; background-position: center; }
+.now-cover.cover-empty { background-image: url(cover-empty.svg); }
+.now-cover.cover-loading { background-image: url(cover-loading.svg); }
+
 /* steps() per keyframe interval: 54 steps for each half of the breath. */
 .now-breathe { animation: now-breathe 3.6s steps(54) infinite paused; }
 

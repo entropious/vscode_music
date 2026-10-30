@@ -52,6 +52,8 @@ button:focus-visible, .bars:focus-visible { outline: 3px solid var(--accent); ou
 .root.idle, .root.idle * { cursor: none !important; }
 
 @keyframes pop { 0% { opacity: 0; transform: translateY(28px) scale(.96); } 100% { opacity: 1; transform: none; } }
+/* The cover comes in without fading, so the record behind it never shows through. */
+@keyframes pop-cover { 0% { transform: translateY(28px) scale(.96); } 100% { transform: none; } }
 @keyframes heart { 0% { transform: scale(1); } 35% { transform: scale(1.4); } 100% { transform: scale(1); } }
 @keyframes toast { 0% { opacity: 0; transform: translate(-50%, -12px); } 100% { opacity: 1; transform: translate(-50%, 0); } }
 
@@ -93,16 +95,14 @@ button:focus-visible, .bars:focus-visible { outline: 3px solid var(--accent); ou
 .art { position: relative; flex-shrink: 0; width: calc(var(--C) * 1.46); height: var(--C); }
 /* The shifts are .1 and .5 of the cover, in the record's own width (.94 of the cover). */
 .vinyl { position: absolute; left: 0; top: calc(var(--C) * .03); width: calc(var(--C) * .94); height: calc(var(--C) * .94); transform: translateX(10.64%); transition: transform 1s var(--ease); }
-.root.playing .vinyl { transform: translateX(53.19%); }
+.root.record-out .vinyl { transform: translateX(53.19%); }
 .disc { box-shadow: 0 24px 60px rgba(0, 0, 0, .55); }
 .cover-wrap { position: absolute; left: 0; top: 0; width: var(--C); height: var(--C); }
-.cover { --breathe: 1.022; width: 100%; height: 100%; border-radius: 22px; background-color: #1B1D24; background-size: cover; background-position: center; box-shadow: 0 32px 80px rgba(0, 0, 0, .55), 0 0 140px var(--glow); transition: box-shadow 1.2s ease; }
-/* Without a cover the tile stays opaque, so the record behind it doesn't show through. */
-.cover.empty { display: flex; align-items: center; justify-content: center; background-image: linear-gradient(140deg, #262833 0%, #14151B 100%); color: rgba(255, 255, 255, .35); }
-.cover-note { width: 34%; height: 34%; }
-.cover:not(.empty) .cover-note { display: none; }
+/* Opaque under the placeholders too, so the record behind it doesn't show through. */
+.cover { --breathe: 1.022; width: 100%; height: 100%; border-radius: 22px; background-color: #1B1D24; box-shadow: 0 32px 80px rgba(0, 0, 0, .55), 0 0 140px var(--glow); transition: box-shadow 1.2s ease; }
 .pop { animation: pop .7s var(--ease) both; }
 .heading.pop { animation-delay: .08s; }
+.cover-wrap.pop { animation-name: pop-cover; }
 
 .info { flex: 1 1 360px; min-width: 0; max-width: 860px; display: flex; flex-direction: column; gap: 14px; }
 .heading { display: flex; flex-direction: column; gap: 12px; }

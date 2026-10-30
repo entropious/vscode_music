@@ -162,6 +162,101 @@ export class CoverLayers {
   }
 }
 
+/** Covers already loaded, which show at once. */
+const loadedCovers = new Set();
+/** Covers being loaded: whether each one came in. */
+const pendingCovers = new Map();
+
+/**
+ * @param {string} url
+ * @returns {Promise<boolean>}
+ */
+function loadCover(url) {
+  let pending = pendingCovers.get(url);
+  if (!pending) {
+    const img = new Image();
+    img.src = url;
+    pending = img.decode().then(
+      () => {
+        loadedCovers.add(url);
+        pendingCovers.delete(url);
+        return true;
+      },
+      () => {
+        pendingCovers.delete(url);
+        return false;
+      },
+    );
+    pendingCovers.set(url, pending);
+  }
+  return pending;
+}
+
+/**
+ * Loads a cover ahead of time, such as the next track's, so that it shows at once.
+ * @param {string | undefined | null} url
+ */
+export function preloadCover(url) {
+  if (url && !loadedCovers.has(url)) {
+    void loadCover(url);
+  }
+}
+
+/**
+ * Shows a cover as an element's background (`.now-cover` in nowArt.css). While the next cover
+ * loads the element keeps the one it has, however long that takes; the loading placeholder is
+ * only for an element with no cover yet, and the empty one for no cover or one that failed to load.
+ * @param {HTMLElement} el
+ * @param {string | undefined | null} url
+ */
+export function showCover(el, url) {
+  el.dataset['cover'] = url ?? '';
+  /** @param {string} state */
+  const set = (state) => {
+    el.classList.toggle('cover-loading', state === 'loading');
+    el.classList.toggle('cover-empty', state === 'empty');
+    el.style.backgroundImage = state === 'loaded' && url ? `url("${url}")` : '';
+  };
+  if (!url || loadedCovers.has(url)) {
+    set(url ? 'loaded' : 'empty');
+    return;
+  }
+  if (!el.style.backgroundImage) {
+    set('loading');
+  }
+  void loadCover(url).then((loaded) => {
+    if (el.dataset['cover'] === url) {
+      set(loaded ? 'loaded' : 'empty');
+    }
+  });
+}
+
+/** How long music may stop, as it does between two tracks, before the record slides back under the cover. */
+const RECORD_HOLD_MS = 1500;
+
+/**
+ * Keeps the class `record-out` (the record slid out from under the cover) on an element while
+ * music plays and for a moment after it stops, so that a track change doesn't move the record.
+ * @param {Element} el
+ * @returns {(playing: boolean) => void} to call on every playback status
+ */
+export function recordOut(el) {
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let timer;
+  return (playing) => {
+    if (playing) {
+      clearTimeout(timer);
+      timer = undefined;
+      el.classList.add('record-out');
+    } else if (timer === undefined && el.classList.contains('record-out')) {
+      timer = setTimeout(() => {
+        timer = undefined;
+        el.classList.remove('record-out');
+      }, RECORD_HOLD_MS);
+    }
+  };
+}
+
 /** The art's endless animations move in steps of this length (see nowArt.css). */
 export const FRAME_MS = 1000 / 30;
 

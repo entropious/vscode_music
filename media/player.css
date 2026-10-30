@@ -43,12 +43,15 @@ body { position: relative; }
 /* The cover with a record that slides out from under it while music plays; nowArt.css turns
    the record and makes the cover breathe. */
 .now .art { --c: 64px; position: relative; flex: none; width: calc(var(--c) * 1.46); height: var(--c); }
-.now .art .cover { --breathe: 1.03; position: absolute; left: 0; top: 0; width: var(--c); height: var(--c); background: color-mix(in srgb, var(--vscode-foreground) 13%, var(--vscode-sideBar-background, #1e1e1e)); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+.now .art .cover { --breathe: 1.03; position: absolute; left: 0; top: 0; width: var(--c); height: var(--c); background-color: color-mix(in srgb, var(--vscode-foreground) 13%, var(--vscode-sideBar-background, #1e1e1e)); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
 .now .vinyl { position: absolute; left: 0; top: calc(var(--c) * .04); width: calc(var(--c) * .92); height: calc(var(--c) * .92); transform: translateX(calc(var(--c) * .08)); transition: transform 1s cubic-bezier(.2, .8, .2, 1); }
-body.playing .now .vinyl { transform: translateX(calc(var(--c) * .5)); }
+body.record-out .now .vinyl { transform: translateX(calc(var(--c) * .5)); }
 .now .disc { --groove: 1.5px; box-shadow: 0 4px 14px rgba(0, 0, 0, .5); }
-.now .head.pop { animation: pop .7s cubic-bezier(.2, .8, .2, 1) both; }
+.now .head.pop .meta { animation: pop .7s cubic-bezier(.2, .8, .2, 1) both; }
+/* The cover comes in without fading, so the record behind it never shows through. */
+.now .head.pop .art { animation: pop-cover .7s cubic-bezier(.2, .8, .2, 1) both; }
 @keyframes pop { 0% { opacity: 0; transform: translateY(12px) scale(.97); } 100% { opacity: 1; transform: none; } }
+@keyframes pop-cover { 0% { transform: translateY(12px) scale(.97); } 100% { transform: none; } }
 
 /* The card's background (nowArt.css) with a shade for the text. It sits behind #app and
    follows the card (see placeBg in player.js). */
@@ -66,11 +69,11 @@ body.hidden-view *, body.hidden-view *::before, body.hidden-view *::after { anim
 .card.now.art-bg .meta .artist { color: rgba(255, 255, 255, .78); }
 .card.now.art-bg .meta .title { text-shadow: 0 2px 14px rgba(0, 0, 0, .35); }
 @media (prefers-reduced-motion: reduce) {
-  .now .head.pop { animation: none !important; }
+  .now .head.pop :is(.meta, .art) { animation: none !important; }
   .now .vinyl { transition: none; }
 }
 
-.cover { width: 64px; height: 64px; border-radius: 10px; object-fit: cover; flex: none; background: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--muted); }
+.cover { width: 64px; height: 64px; border-radius: 10px; flex: none; background-color: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .meta .source { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent-text); white-space: nowrap; overflow: hidden; }
 /* Likely AI-generated track (slopless.art). */
@@ -89,7 +92,7 @@ body.hidden-view *, body.hidden-view *::before, body.hidden-view *::after { anim
 @media (max-width: 240px) {
   .now .cover { width: 48px; height: 48px; }
   .now .art { --c: 48px; width: calc(var(--c) * 1.25); }
-  body.playing .now .vinyl { transform: translateX(calc(var(--c) * .3)); }
+  body.record-out .now .vinyl { transform: translateX(calc(var(--c) * .3)); }
 }
 /* The like button sits in the volume row so the title and artist get the full width. */
 .like { width: 34px; height: 34px; flex: none; margin: -9px -8px -9px 0; border: none; border-radius: 50%; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; }
