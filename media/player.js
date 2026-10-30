@@ -115,7 +115,7 @@
     const vol = Math.round(audio.volume * 100);
     const head = cur
       ? `<div class="head">
-          ${cur.cover ? `<img class="cover" src="${esc(cur.cover)}" alt="">` : `<div class="cover">${I.note}</div>`}
+          <div class="art"><div class="vinyl"><div class="disc" id="disc"><div class="label" id="vinylLabel"></div><div class="hole"></div></div></div>${cur.cover ? `<img class="cover" src="${esc(cur.cover)}" alt="">` : `<div class="cover">${I.note}</div>`}</div>
           <div class="meta">
             ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^(My Vibe|Station|Radio)/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
             <div class="title" title="${esc(cur.title)}">${esc(cur.title)}</div>
@@ -126,7 +126,7 @@
       : `<div class="empty">Nothing is playing. Start My Vibe or search for a track.</div>`;
     const bars = '<i></i>'.repeat(BARS);
     barFill = [];
-    return `<section class="card now">
+    return `<section class="card now ${cur && cur.cover ? 'art-bg' : ''}">
         ${head}
         <div class="wave"><div class="bars" id="bars">${bars}</div><input id="seek" type="range" min="0" max="1000" value="0" aria-label="Seek"></div>
         <div class="times"><span id="pos">${fmt(position())}</span><span id="dur">${fmt(duration())}</span></div>
@@ -183,11 +183,116 @@
       ${body}`;
     // The panel's CSP forbids inline styles in markup, so sizes are set through the DOM.
     const heights = barHeights(cur ? cur.id : '');
-    document.querySelectorAll('#bars i').forEach((b, i) => { /** @type {HTMLElement} */ (b).style.height = `${heights[i]}px`; });
+    // Each bar bounces at its own pace, as in the fullscreen remote's progress.
+    document.querySelectorAll('#bars i').forEach((b, i) => {
+      const bar = /** @type {HTMLElement} */ (b);
+      bar.style.height = `${heights[i]}px`;
+      bar.style.setProperty('--d', `${(0.55 + ((i * 37) % 9) * 0.09).toFixed(2)}s`);
+      bar.style.setProperty('--delay', `${(-((i * 53) % 17) * 0.07).toFixed(2)}s`);
+    });
     document.querySelectorAll('[data-bg]').forEach((el) => { /** @type {HTMLElement} */ (el).style.background = /** @type {HTMLElement} */ (el).dataset.bg || ''; });
     const vol = /** @type {HTMLInputElement|null} */ (document.getElementById('vol'));
     if (vol) vol.style.setProperty('--p', `${vol.value}%`);
+    showArt(cur);
     updateProgress();
+  }
+
+  // ------------------------------------------------------------------ now playing card art
+  // The card's background lives outside #app, which is rebuilt on every state change, so its
+  // slow drift and the cross-fade between covers aren't restarted; it follows the card's box.
+  const nowBg = /** @type {HTMLElement} */ (document.getElementById('nowBg'));
+  const artLayers = /** @type {HTMLElement} */ (document.getElementById('artLayers'));
+  const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let artTrackId = null;
+  let artCover = null;
+  const cardObserver = new ResizeObserver(() => placeBg());
+
+  function placeBg() {
+    const card = /** @type {HTMLElement|null} */ (document.querySelector('.card.now.art-bg'));
+    nowBg.hidden = !card;
+    if (!card) return;
+    const r = card.getBoundingClientRect();
+    const b = document.body.getBoundingClientRect();
+    Object.assign(nowBg.style, { top: `${r.top - b.top}px`, left: `${r.left - b.left}px`, width: `${r.width}px`, height: `${r.height}px` });
+  }
+
+  /** Colors of a cover, read from its pixels: Yandex serves covers with CORS, so a canvas may read them. */
+  function paletteOf(url) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        try {
+          const n = 16;
+          const c = document.createElement('canvas');
+          c.width = c.height = n;
+          const ctx = /** @type {CanvasRenderingContext2D} */ (c.getContext('2d', { willReadFrequently: true }));
+          ctx.drawImage(img, 0, 0, n, n);
+          const d = ctx.getImageData(0, 0, n, n).data;
+          const px = [];
+          for (let i = 0; i < d.length; i += 4) {
+            const [r, g, bl] = [d[i], d[i + 1], d[i + 2]];
+            const max = Math.max(r, g, bl);
+            const sat = max ? (max - Math.min(r, g, bl)) / max : 0;
+            px.push({ c: [r, g, bl], score: sat * 0.7 + (max / 255) * 0.3 });
+          }
+          px.sort((x, y) => y.score - x.score);
+          const rgb = (p, minV) => {
+            const m = Math.max(...p.c, 1) / 255;
+            const k = m < minV ? minV / m : 1;
+            return `rgb(${p.c.map((v) => Math.min(255, Math.round(v * k))).join(',')})`;
+          };
+          resolve({ a: rgb(px[0], 0.6), b: rgb(px[Math.floor(px.length / 5)], 0.5) });
+        } catch (e) {
+          reject(e);
+        }
+      };
+      img.onerror = reject;
+      img.src = url;
+    });
+  }
+
+  /** Sets the record's label and the card's background to the current cover; animates a track change. */
+  function showArt(cur) {
+    const card = document.querySelector('.card.now');
+    if (card) cardObserver.observe(card);
+    const label = document.getElementById('vinylLabel');
+    if (label && cur && cur.cover) label.style.backgroundImage = `url("${cur.cover}")`;
+    const id = cur ? cur.id : null;
+    if (id !== artTrackId) {
+      const first = artTrackId === null;
+      artTrackId = id;
+      const head = document.querySelector('.now .head');
+      if (head && !first) head.classList.add('pop');
+    }
+    const url = cur && cur.cover ? cur.cover : null;
+    if (url !== artCover) {
+      artCover = url;
+      if (url) {
+        const layer = document.createElement('div');
+        layer.className = 'art-layer';
+        const inner = document.createElement('div');
+        inner.style.backgroundImage = `url("${url}")`;
+        layer.appendChild(inner);
+        artLayers.appendChild(layer);
+        setTimeout(() => { while (artLayers.children.length > 1 && artLayers.firstElementChild !== layer) artLayers.firstElementChild?.remove(); }, 1600);
+        paletteOf(url.replace(/\d+x\d+$/, '100x100'))
+          .then((p) => { if (artCover === url) { nowBg.style.setProperty('--pal-a', p.a); nowBg.style.setProperty('--pal-b', p.b); } })
+          .catch(() => undefined);
+      }
+    }
+    placeBg();
+  }
+  window.addEventListener('resize', placeBg);
+
+  /** Turns the record while music plays: kept in JS so a rebuilt card picks up where it was. */
+  let spin = 0;
+  let spinAt = performance.now();
+  function turnRecord(now) {
+    if (isPlaying() && !reduceMotion.matches) spin = (spin + (now - spinAt) * 0.2) % 360;
+    spinAt = now;
+    const disc = document.getElementById('disc');
+    if (disc) disc.style.transform = `rotate(${spin}deg)`;
   }
 
   /**
@@ -211,7 +316,8 @@
 
   // While audio is playing, the waveform and time counter update every frame rather than
   // on timeupdate (~4 times a second) or on the playing window's status (once a second).
-  function frame() {
+  function frame(now) {
+    turnRecord(now);
     if (isPlaying()) {
       paintBars();
       const pos = document.getElementById('pos');

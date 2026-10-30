@@ -49,7 +49,12 @@ export type Message =
   | { type: 'handover' }
   /** A window tells the service its token and settings, on connect and whenever they change. */
   | { type: 'hello'; settings: ServiceSettings }
-  /** The service accepted the window's first hello: the window is now its remote. */
+  /**
+   * A remote that is not a VS Code window, such as the fullscreen macOS app, joins the service
+   * without settings: the token and the rest stay as the windows set them.
+   */
+  | { type: 'attach'; protocol: number }
+  /** The service accepted the window's first hello or a remote's attach: it is now its remote. */
   | { type: 'welcome' }
   /** The service turned the window away: it speaks an older protocol and must be reloaded. */
   | { type: 'outdated' }

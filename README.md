@@ -52,7 +52,9 @@ Run **Yandex Music: Sign In** from the Command Palette.
 
 The browser sign-in uses the same OAuth client as the Yandex Music desktop app
 and asks only for music and basic account access. The token is kept in VS Code
-SecretStorage, which is backed by the system keychain.
+SecretStorage, which is backed by the system keychain. On macOS the player
+service also keeps a copy in the login keychain (item `vscode-yandex-music`), so
+the fullscreen remote can start it without VS Code; signing out deletes it.
 
 Full tracks need a Yandex Plus subscription; without it Yandex serves 30-second
 previews. Tracks stream as MP3 at up to 320 kbps, and the mini player shows the
@@ -70,6 +72,34 @@ remote controls. A command that starts playback moves the audio to the window it
 came from once you have clicked inside that window's player panel — the webview
 is only allowed to play sound after a click inside it. If the window that plays
 music closes, another one picks up from the same track and position.
+
+## Fullscreen remote (macOS)
+
+**Yandex Music Remote** is a separate fullscreen app for a big screen: a large
+cover with a spinning record, a background in the cover's colors, a progress bar
+of bouncing bars and controls you can hit from across the room. It plays nothing
+itself: it controls the player service that the extension runs on macOS, the
+same way a VS Code window does, and starts that service itself when it isn't
+running, so it works without VS Code open. The music keeps playing while the app
+is open, even after VS Code is closed.
+
+Once the app is installed, the player panel's title bar gets a `⛶` button that
+opens it, and so does **Yandex Music: Open Fullscreen Remote**. The extension
+has to be installed and signed in once. The app isn't signed, so build it yourself (see
+[`remote/`](https://github.com/entropious/vscode_music/tree/main/remote) and
+[DEVELOPMENT.md](https://github.com/entropious/vscode_music/blob/main/DEVELOPMENT.md#fullscreen-remote-macos))
+and copy `Yandex Music Remote.app` to `/Applications`.
+
+| Key | Action |
+|---|---|
+| `Space` | Play / pause |
+| `←` / `→` | Previous / next track |
+| `↑` / `↓` | Volume |
+| `L` / `M` | Like / mute |
+| `Q` / `/` | Queue / search |
+| `F` | Leave or enter full screen |
+
+Media keys keep working through the player service's Now Playing.
 
 ## AI-generated music
 

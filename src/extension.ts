@@ -1,3 +1,5 @@
+import { execFile } from 'child_process';
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { type Station, Track, YandexMusicClient, artistLine, fullTitle } from './api';
 import { Auth } from './auth';
@@ -6,6 +8,11 @@ import { PROTOCOL, serviceBuild, socketPathFor } from './protocol';
 import { ServiceClient } from './serviceClient';
 import { SLOPLESS_API } from './slop';
 import { PlayerSync } from './sync';
+
+/** The fullscreen remote's macOS bundle ID, `appBundleId` in `remote/scripts/package.ts`. */
+const REMOTE_BUNDLE_ID = 'net.entro.yandex-music-remote';
+const REMOTE_APP = 'Yandex Music Remote.app';
+const REMOTE_DOCS = 'https://github.com/entropious/vscode_music#fullscreen-remote-macos';
 
 export interface ExtensionApi {
   player: Player;
@@ -54,6 +61,37 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const onTokenChanged = async () => {
     await service?.sendSettings();
     await player.refreshAccount();
+  };
+
+  /** Where Yandex Music Remote, the fullscreen app in `remote/`, is installed on macOS. */
+  let remoteApp: string | undefined;
+  const findRemote = async () => {
+    if (process.platform !== 'darwin') {
+      return;
+    }
+    const home = process.env.HOME ?? '';
+    remoteApp = [`/Applications/${REMOTE_APP}`, `${home}/Applications/${REMOTE_APP}`].find((p) => fs.existsSync(p));
+    // Anywhere else, Spotlight knows it by its bundle ID.
+    remoteApp ??= await new Promise<string | undefined>((resolve) =>
+      execFile('mdfind', [`kMDItemCFBundleIdentifier == '${REMOTE_BUNDLE_ID}'`], (err, out) => resolve(err ? undefined : out.split('\n').find((l) => l.endsWith('.app')))),
+    );
+    // The player panel's button shows only while the app is installed.
+    void vscode.commands.executeCommand('setContext', 'yandexMusic.remoteInstalled', !!remoteApp);
+  };
+  void findRemote();
+  context.subscriptions.push(vscode.window.onDidChangeWindowState((s) => s.focused && void findRemote()));
+
+  /** Opens the fullscreen remote; it starts the player service itself if no window has. */
+  const openRemote = async () => {
+    await findRemote();
+    const app = remoteApp;
+    const opened = app && (await new Promise<boolean>((resolve) => execFile('open', [app], (err) => resolve(!err))));
+    if (!opened) {
+      const how = 'How to Install';
+      if ((await vscode.window.showWarningMessage('Yandex Music Remote is not installed. It is a fullscreen macOS app for the big screen that controls this player.', how)) === how) {
+        void vscode.env.openExternal(vscode.Uri.parse(REMOTE_DOCS));
+      }
+    }
   };
 
   const guard =
@@ -127,6 +165,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     ),
     // Clicking a status bar item leaves it focused, and showHover shows the focused
     // item's tooltip, which is the mini player card.
+    vscode.commands.registerCommand('yandexMusic.openRemote', guard(openRemote)),
     vscode.commands.registerCommand('yandexMusic.showCard', () => vscode.commands.executeCommand('workbench.action.showHover')),
     vscode.commands.registerCommand('yandexMusic.playPause', guard(() => player.playPause())),
     vscode.commands.registerCommand('yandexMusic.next', guard(() => player.next())),

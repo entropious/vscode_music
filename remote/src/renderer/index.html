@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self'; font-src 'self'; img-src https: data:">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Yandex Music Remote</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="root" class="root">
+
+  <div class="bg" aria-hidden="true">
+    <div class="bg-art" id="bgArt"></div>
+    <div class="blob blob-a m"></div>
+    <div class="blob blob-b m"></div>
+    <div class="vignette"></div>
+  </div>
+
+  <div class="shell">
+    <header class="top">
+      <div class="brand">
+        <svg class="glyph" width="44" height="44" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="24" height="24" rx="5.4" fill="#110503"/><g transform="translate(2.4 2.4) scale(0.8)"><path d="M7 4c-2 0-2.5 1-2.5 3v2c0 1.5-.8 2.5-2 3 1.2.5 2 1.5 2 3v2c0 2 .5 3 2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="M17 4c2 0 2.5 1 2.5 3v2c0 1.5.8 2.5 2 3-1.2.5-2 1.5-2 3v2c0 2-.5 3-2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="m130.863 57.739-.468-2.327-19.788-3.457 11.498-15.557-1.337-1.462-16.913 8.11 2.139-21.54-1.738-.997-10.295 17.418L82.395 12H80.39l2.74 25.064-29.08-23.269-2.474.732 22.396 28.122-44.323-14.76-2.006 2.261L67.22 52.686l-54.618 4.521-.602 3.39 56.757 6.184-47.33 39.157 2.005 2.726 56.356-30.648-11.164 53.983h3.41l21.592-50.792 13.17 39.756 2.34-1.795-5.415-40.42 20.524 23.268 1.337-2.128-15.711-28.853 21.928 8.111.201-2.46-19.655-14.493 18.518-4.454Z" transform="translate(5.55 6.9) scale(0.085)" fill="#FFEE00"/></g></svg>
+        <span>Yandex Music</span>
+      </div>
+      <nav class="pills" aria-label="Sources">
+        <button id="pillVibe" aria-pressed="false">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/></svg>
+          <span>Vibe</span>
+        </button>
+        <button id="pillLiked" aria-pressed="false">
+          <svg class="heart" width="22" height="22" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
+          <span>Liked</span>
+        </button>
+        <button id="pillPlaylists" aria-pressed="false">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h11"/><path d="M4 11h11"/><path d="M4 16h7"/><path d="M17 18.5a2.5 2.5 0 1 1 0-5a2.5 2.5 0 1 1 0 5z"/><path d="M19.5 16V6l2 1"/></svg>
+          <span>Playlists</span>
+        </button>
+      </nav>
+      <div class="top-right">
+        <button id="queueBtn" class="queue-btn" aria-pressed="false">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 6h16"/><path d="M4 12h16"/><path d="M4 18h10"/></svg>
+          <span>Queue</span>
+        </button>
+        <div id="avatar" class="avatar" role="img" aria-label="Account"></div>
+      </div>
+    </header>
+
+    <main class="stage">
+      <section class="now" aria-label="Now playing">
+        <div class="art" id="art">
+          <div class="vinyl m" id="vinyl">
+            <div class="disc m">
+              <div class="label" id="vinylLabel"></div>
+              <div class="hole"></div>
+            </div>
+            <div class="shine"></div>
+          </div>
+          <div class="cover-wrap m" id="coverWrap">
+            <div class="cover m" id="cover">
+              <svg class="cover-note" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13"/><path d="M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/><path d="M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/></svg>
+            </div>
+          </div>
+        </div>
+
+        <div class="info">
+          <div class="heading m" id="heading">
+            <div class="source" id="source">
+              <span class="ai" id="aiBadge" hidden>AI</span>
+              <svg id="sourceWave" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/></svg>
+              <span id="sourceLabel"></span>
+            </div>
+            <h1 id="title"></h1>
+            <div class="artist" id="artist"></div>
+          </div>
+          <div class="extras">
+            <button id="radioBtn" class="radio-btn">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#FFCC00" stroke-width="2.3" stroke-linecap="round" aria-hidden="true"><path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/></svg>
+              <span>Track radio</span>
+            </button>
+            <span class="stream" id="stream"></span>
+          </div>
+
+          <div class="progress">
+            <div class="bars" id="bars" role="slider" tabindex="0" aria-label="Position" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"></div>
+            <div class="times"><span id="elapsed">0:00</span><span id="total">0:00</span></div>
+          </div>
+
+          <button id="upNext" class="up-next">
+            <span class="thumb" id="nextArt"></span>
+            <span class="up-text">
+              <span class="up-label">UP NEXT</span>
+              <span class="up-line"><span class="up-title" id="nextTitle"></span> <span class="up-artist" id="nextArtist"></span></span>
+            </span>
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 5l7 7-7 7"/></svg>
+          </button>
+        </div>
+      </section>
+
+      <div class="dock" role="group" aria-label="Controls">
+        <button id="dislikeBtn" class="round small" aria-label="Dislike and skip" aria-pressed="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></svg>
+        </button>
+        <button id="prevBtn" class="round side" aria-label="Previous track">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 5v14"/><path d="M19 5L9 12l10 7z"/></svg>
+        </button>
+        <div class="play-wrap">
+          <span class="pulse m" aria-hidden="true"></span>
+          <span class="pulse late m" aria-hidden="true"></span>
+          <button id="playBtn" class="play" aria-label="Play">
+            <svg class="i-pause" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.2" stroke-linecap="round" aria-hidden="true"><path d="M8.5 5.5v13"/><path d="M15.5 5.5v13"/></svg>
+            <svg class="i-play" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" aria-hidden="true"><path d="M7 5v14l12-7z"/></svg>
+          </button>
+        </div>
+        <button id="nextBtn" class="round side" aria-label="Next track">
+          <svg viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 5v14"/><path d="M5 5l10 7-10 7z"/></svg>
+        </button>
+        <button id="likeBtn" class="round small like" aria-label="Like" aria-pressed="false">
+          <span class="heart-box m" id="heartBox">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z"/></svg>
+          </span>
+        </button>
+
+        <div class="sep" aria-hidden="true"></div>
+
+        <div class="volume">
+          <button id="muteBtn" class="square" aria-label="Mute" aria-pressed="false">
+            <svg class="i-muted" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 9.5l5 5"/><path d="M21 9.5l-5 5"/></svg>
+            <svg class="i-audible" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6"/><path d="M18.5 6.5a7.5 7.5 0 0 1 0 11"/></svg>
+          </button>
+          <button id="volDown" class="square" aria-label="Volume down">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M5 12h14"/></svg>
+          </button>
+          <div class="vol-meter">
+            <span id="volLabel">—</span>
+            <div class="vol-track" id="volTrack" role="img" aria-label="Volume"><div class="vol-fill" id="volFill"></div></div>
+          </div>
+          <button id="volUp" class="square" aria-label="Volume up">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14"/><path d="M5 12h14"/></svg>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <aside class="drawer" id="drawer" aria-label="Queue and library">
+    <div class="drawer-head">
+      <div class="tabs" role="tablist">
+        <button id="tabQueue" role="tab" aria-selected="true">Queue</button>
+        <button id="tabPlaylists" role="tab" aria-selected="false">Playlists</button>
+        <button id="tabSearch" role="tab" aria-selected="false">Search</button>
+      </div>
+      <button id="closeDrawer" class="square close" aria-label="Close">
+        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="drawer-body" id="drawerBody">
+      <div id="queuePane" class="pane"></div>
+      <div id="playlistsPane" class="pane" hidden></div>
+      <div id="searchPane" class="pane" hidden>
+        <form id="searchForm" class="search">
+          <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M11 4a7 7 0 1 1 0 14a7 7 0 1 1 0-14"/><path d="M20 20l-4-4"/></svg>
+          <input id="query" aria-label="Search tracks, artists and genres" placeholder="Track, artist or genre" autocomplete="off" spellcheck="false">
+        </form>
+        <div id="searchHint" class="hint">Type a track, artist or genre. Tap a result to play it.</div>
+        <div id="searchList" class="rows"></div>
+      </div>
+    </div>
+  </aside>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <div class="overlay" id="overlay" hidden>
+    <div class="overlay-card">
+      <svg class="glyph big m" width="120" height="120" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="24" height="24" rx="5.4" fill="#110503"/><g transform="translate(2.4 2.4) scale(0.8)"><path d="M7 4c-2 0-2.5 1-2.5 3v2c0 1.5-.8 2.5-2 3 1.2.5 2 1.5 2 3v2c0 2 .5 3 2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="M17 4c2 0 2.5 1 2.5 3v2c0 1.5.8 2.5 2 3-1.2.5-2 1.5-2 3v2c0 2-.5 3-2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="m130.863 57.739-.468-2.327-19.788-3.457 11.498-15.557-1.337-1.462-16.913 8.11 2.139-21.54-1.738-.997-10.295 17.418L82.395 12H80.39l2.74 25.064-29.08-23.269-2.474.732 22.396 28.122-44.323-14.76-2.006 2.261L67.22 52.686l-54.618 4.521-.602 3.39 56.757 6.184-47.33 39.157 2.005 2.726 56.356-30.648-11.164 53.983h3.41l21.592-50.792 13.17 39.756 2.34-1.795-5.415-40.42 20.524 23.268 1.337-2.128-15.711-28.853 21.928 8.111.201-2.46-19.655-14.493 18.518-4.454Z" transform="translate(5.55 6.9) scale(0.085)" fill="#FFEE00"/></g></svg>
+      <h2 id="overlayTitle"></h2>
+      <p id="overlayText"></p>
+    </div>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>

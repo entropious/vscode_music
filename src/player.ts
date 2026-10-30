@@ -341,6 +341,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
 <title>Yandex Music</title>
 </head>
 <body>
+<div id="nowBg" class="now-bg" aria-hidden="true" hidden><div class="art-layers" id="artLayers"></div><div class="blob blob-a"></div><div class="blob blob-b"></div><div class="shade"></div></div>
 <div id="app"></div>
 <audio id="audio" preload="auto"></audio>
 <script nonce="${nonce}" src="${js}"></script>
@@ -482,6 +483,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     this.changed.fire();
   }
 
+  /** Volume last shown in a remote window's panel. */
+  private remoteVolume?: number;
+
   private pushState(): void {
     const c = this.core;
     const current = c.current();
@@ -506,6 +510,11 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       remote: !!this.remote,
       status: c.status,
     });
+    // A remote shows the volume of wherever the music plays; the fullscreen app can change it there.
+    if (this.remote && c.volume !== undefined && c.volume !== this.remoteVolume) {
+      this.remoteVolume = c.volume;
+      this.post({ type: 'volume', value: c.volume });
+    }
     this.changed.fire();
   }
 

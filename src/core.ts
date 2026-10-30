@@ -126,6 +126,8 @@ export interface SharedState {
   slop: Record<string, boolean>;
   /** Audio is unlocked in the leader window's panel. */
   audioUnlocked: boolean;
+  /** Volume, 0–1, once something has set it; the fullscreen remote shows it. */
+  volume?: number;
 }
 
 /** Where the audio actually plays: a webview's <audio> element or the macOS service's AVPlayer. */
@@ -220,6 +222,7 @@ export class PlayerCore {
   /** Codec and bitrate of the current stream, e.g. MP3 at 320 kbps. */
   streamInfo?: string;
   audioUnlocked = false;
+  volume?: number;
   slop: Record<string, boolean> = {};
   /** Tracks being looked up on slopless.art right now. */
   private readonly slopPending = new Set<string>();
@@ -270,6 +273,7 @@ export class PlayerCore {
       wave: this.wave && { sessionId: this.wave.sessionId, batches: [...this.wave.batches] },
       slop: this.slop,
       audioUnlocked: this.audioUnlocked,
+      volume: this.volume,
     };
   }
 
@@ -289,6 +293,7 @@ export class PlayerCore {
     this.wave = s.wave && { sessionId: s.wave.sessionId, batches: new Map(s.wave.batches) };
     this.slop = s.slop ?? {};
     this.audioUnlocked = s.audioUnlocked;
+    this.volume = s.volume;
     this.changed();
   }
 
@@ -660,7 +665,9 @@ export class PlayerCore {
   }
 
   async setVolume(value: number): Promise<void> {
+    this.volume = value;
     this.audio.setVolume(value);
+    this.changed();
   }
 
   async previous(): Promise<void> {

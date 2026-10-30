@@ -59,6 +59,42 @@ node .probe/service-check.js   # service: two clients, playback survives one clo
 
 `osascript` is run through `node .probe/jxa.js <file>` where running it directly isn't allowed.
 
+## Fullscreen remote (macOS)
+
+`remote/` is Yandex Music Remote, an Electron app in TypeScript built with
+[Bun](https://bun.sh). It finds the player service's socket in the temp
+directory (`vscode-yandex-music-service-*.sock`), joins it with an `attach`
+message (a remote without settings: the token stays as the windows set it) and
+runs the same calls as a window. A connected app keeps the service running.
+
+When no service answers, the app starts one itself (`remote/src/launch.ts`): it
+finds the newest copy of the extension in `~/.vscode/extensions` (or Insiders,
+Cursor, VSCodium, Windsurf), computes the socket the windows of that editor look
+at from its global storage folder, and runs the extension's `out/service.js`
+with its own Electron in Node mode. Such a service has no window to say hello,
+so on every hello the service saves the window's settings to
+`service-settings.json` in the global storage and the token to the login
+keychain (`security`, item `vscode-yandex-music`), and reads both when it
+starts. `YM_EXTENSION_DIR` and `YM_STORAGE_DIR` point the app at another copy,
+e.g. this repository after `npm run compile`.
+
+```bash
+cd remote
+bun install
+bun run start      # build and open it; add -- --windowed for a window
+bun run package    # dist/Yandex Music Remote-darwin-{arm64,x64}/Yandex Music Remote.app
+```
+
+The app isn't signed: after copying it to `/Applications`, open it with right
+click → Open once, or run `xattr -dr com.apple.quarantine "/Applications/Yandex Music Remote.app"`.
+The extension shows its **Open Fullscreen Remote** button once it finds the app
+in `/Applications`, `~/Applications` or, by its bundle ID
+`net.entro.yandex-music-remote`, through Spotlight.
+
+Without macOS and a token, run it against a stand-in service with a made-up
+queue: `bun run mock` in one terminal, `bun run start -- --windowed` in
+another. `--socket <path>` points the app at a socket of your choice.
+
 ## Endpoint settings
 
 These point the extension at a different API or OAuth server, such as a mock:

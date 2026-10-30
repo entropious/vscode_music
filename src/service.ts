@@ -5,8 +5,12 @@
  * music is played, and it exits once no window has been connected for a few seconds.
  *
  *   ELECTRON_RUN_AS_NODE=1 <VS Code helper> out/service.js <socket> <helper/avplayer.js> <log file>
+ *
+ * The fullscreen remote app (remote/) starts it the same way, with its own Electron, when no
+ * VS Code window has: the settings windows sent last are kept next to the log, and the token
+ * in the login keychain, so a service started without a window can still play.
  */
-import { type ChildProcess, spawn } from 'child_process';
+import { type ChildProcess, execFile, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
@@ -166,6 +170,66 @@ class AvAudio implements AudioOutput {
 }
 
 let settings: ServiceSettings = { protocol: PROTOCOL, ...BUILD, apiBaseUrl: 'https://api.music.yandex.net', quality: 'high', volume: 0.7, aiLabels: true, sloplessBaseUrl: SLOPLESS_API };
+
+/** Settings of the last window without the token, for a service started by the remote app. */
+const SETTINGS_FILE = path.join(path.dirname(logFile), 'service-settings.json');
+/** The token's item in the login keychain, written and read by /usr/bin/security, which may then read it without asking. */
+const KEYCHAIN = ['-s', 'vscode-yandex-music', '-a', 'token'];
+/** What was last saved, so a window's repeated hello doesn't write it again. */
+let savedSettings: string | undefined;
+let savedToken: string | undefined;
+/** A window has sent its settings; the saved ones must not override them. */
+let windowSettings = false;
+
+/** Runs `security` with commands on stdin, so the token never shows in the process list. */
+function keychain(command: string): Promise<void> {
+  return new Promise((resolve) => {
+    const p = spawn('security', ['-i'], { stdio: ['pipe', 'ignore', 'pipe'] });
+    p.stderr!.on('data', (d) => log.warn(`keychain: ${String(d).trim()}`));
+    p.on('error', () => resolve());
+    p.on('exit', () => resolve());
+    p.stdin!.end(`${command}\n`);
+  });
+}
+
+async function saveSettings(s: ServiceSettings): Promise<void> {
+  const { token, protocol, build, builtAt, ...rest } = s;
+  const json = JSON.stringify(rest);
+  if (json !== savedSettings) {
+    savedSettings = json;
+    await fs.promises.writeFile(SETTINGS_FILE, json).catch((e) => log.warn(`settings: can't save them: ${errorText(e)}`));
+  }
+  if (token !== savedToken) {
+    savedToken = token;
+    if (token && /^[\w.-]+$/.test(token)) {
+      await keychain(`add-generic-password -U ${KEYCHAIN.join(' ')} -w ${token}`);
+    } else if (!token) {
+      await keychain(`delete-generic-password ${KEYCHAIN.join(' ')}`);
+    }
+  }
+}
+
+/** Takes the settings and token saved by an earlier window, unless a window has already sent its own. */
+async function loadSettings(): Promise<void> {
+  let saved: Partial<ServiceSettings> = {};
+  try {
+    savedSettings = await fs.promises.readFile(SETTINGS_FILE, 'utf8');
+    saved = JSON.parse(savedSettings);
+  } catch {
+    // never saved: a window must say hello first
+  }
+  const token = await new Promise<string | undefined>((resolve) =>
+    execFile('security', ['find-generic-password', ...KEYCHAIN, '-w'], (err, out) => resolve(err ? undefined : out.trim() || undefined)),
+  );
+  savedToken = token;
+  if (windowSettings) {
+    return;
+  }
+  settings = { ...settings, ...saved, token, protocol: PROTOCOL, ...BUILD };
+  core.volume = settings.volume;
+  audio.setVolume(settings.volume);
+  log.info(`service: took the saved settings${token ? ' and token' : ', no token'}`);
+}
 // The log lies in the extension's global storage, next to the file of AI marks.
 const slopChecker = new SlopChecker(path.join(path.dirname(logFile), SLOP_FILE));
 const clients = new Set<net.Socket>();
@@ -209,7 +273,10 @@ async function onRemote(command: string, position?: number): Promise<void> {
 
 const core = new PlayerCore(
   {
-    client: async () => new YandexMusicClient(settings.apiBaseUrl, settings.token),
+    client: async () => {
+      await loaded;
+      return new YandexMusicClient(settings.apiBaseUrl, settings.token);
+    },
     quality: () => settings.quality,
     log,
     notice: (text) => notify(text),
@@ -223,6 +290,8 @@ const core = new PlayerCore(
   },
   audio,
 );
+core.volume = settings.volume;
+const loaded = loadSettings().catch((e) => log.warn(`settings: can't load them: ${errorText(e)}`));
 core.onDidChange(() => broadcaster.broadcast(clients, core.sharedState(), core.status));
 
 /** Track last shown in Now Playing; it's announced once the stream has been handed to the player. */
@@ -245,8 +314,19 @@ function shutdown(reason: string): void {
   setTimeout(() => process.exit(0), 200);
 }
 
+/** Counts a connection as a remote, so its calls run and the service stays up while it is connected. */
+function accept(socket: net.Socket, kind: string): void {
+  if (!clients.has(socket)) {
+    clients.add(socket);
+    clearTimeout(shutdownTimer);
+    shutdownTimer = undefined;
+    log.info(`service: ${kind} connected (${clients.size} now)`);
+  }
+  send(socket, { type: 'welcome' });
+}
+
 async function execute(socket: net.Socket, m: Message): Promise<void> {
-  if (m.type !== 'hello' && !clients.has(socket)) {
+  if (m.type !== 'hello' && m.type !== 'attach' && !clients.has(socket)) {
     return;
   }
   switch (m.type) {
@@ -265,20 +345,25 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
         socket.end();
         return;
       }
-      if (!clients.has(socket)) {
-        clients.add(socket);
-        clearTimeout(shutdownTimer);
-        shutdownTimer = undefined;
-        log.info(`service: window connected (${clients.size} now)`);
-      }
       const volumeChanged = m.settings.volume !== settings.volume;
       settings = m.settings;
+      windowSettings = true;
+      void saveSettings(settings);
       if (volumeChanged) {
-        audio.setVolume(settings.volume);
+        void core.setVolume(settings.volume);
       }
-      send(socket, { type: 'welcome' });
+      accept(socket, 'window');
       return;
     }
+    case 'attach':
+      if (m.protocol !== PROTOCOL) {
+        log.info(`service: turned away a remote of protocol ${m.protocol}, this is ${PROTOCOL}`);
+        send(socket, { type: 'outdated' });
+        socket.end();
+        return;
+      }
+      accept(socket, 'remote app');
+      return;
     case 'adopt':
       if (core.index < 0 && m.state.index >= 0) {
         core.applySharedState(m.state);
@@ -309,7 +394,7 @@ const server = net.createServer((socket) => {
     if (!clients.delete(socket)) {
       return;
     }
-    log.info(`service: window disconnected (${clients.size} left)`);
+    log.info(`service: remote disconnected (${clients.size} left)`);
     if (!clients.size) {
       shutdownTimer = setTimeout(() => shutdown('no window connected'), GRACE_MS);
     }
