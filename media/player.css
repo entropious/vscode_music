@@ -40,23 +40,17 @@ body { position: relative; }
 #app { position: relative; z-index: 1; }
 .card { background: var(--card); border: 1px solid var(--border); border-radius: 16px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
 .now .head { display: flex; gap: 12px; align-items: center; }
-/* The cover with a record that slides out from under it while music plays; nowArt.css turns
-   the record and makes the cover breathe. */
-.now .art { --c: 64px; position: relative; flex: none; width: calc(var(--c) * 1.46); height: var(--c); }
-.now .art .cover { --breathe: 1.03; position: absolute; left: 0; top: 0; width: var(--c); height: var(--c); background-color: color-mix(in srgb, var(--vscode-foreground) 13%, var(--vscode-sideBar-background, #1e1e1e)); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
-.now .vinyl { position: absolute; left: 0; top: calc(var(--c) * .04); width: calc(var(--c) * .92); height: calc(var(--c) * .92); transform: translateX(calc(var(--c) * .08)); transition: transform 1s cubic-bezier(.2, .8, .2, 1); }
-body.record-out .now .vinyl { transform: translateX(calc(var(--c) * .5)); }
-.now .disc { --groove: 1.5px; box-shadow: 0 4px 14px rgba(0, 0, 0, .5); }
-.now .head.pop .meta { animation: pop .7s cubic-bezier(.2, .8, .2, 1) both; }
-/* The cover comes in without fading, so the record behind it never shows through. */
-.now .head.pop .art { animation: pop-cover .7s cubic-bezier(.2, .8, .2, 1) both; }
-@keyframes pop { 0% { opacity: 0; transform: translateY(12px) scale(.97); } 100% { opacity: 1; transform: none; } }
-@keyframes pop-cover { 0% { transform: translateY(12px) scale(.97); } 100% { transform: none; } }
+/* The track card has no animation: the cover (with its placeholders from nowArt.css, the
+   animated loading one replaced by the still empty one) and the background stand still. */
+.now .art { --c: 64px; flex: none; width: var(--c); height: var(--c); }
+.now .art .cover { width: var(--c); height: var(--c); background-color: color-mix(in srgb, var(--vscode-foreground) 13%, var(--vscode-sideBar-background, #1e1e1e)); box-shadow: 0 6px 18px rgba(0, 0, 0, .45); }
+.now .art .cover.cover-loading { background-image: url(cover-empty.svg); }
 
 /* The card's background (nowArt.css) with a shade for the text. It sits behind #app and
    follows the card (see placeBg in player.js). */
 .now-bg { position: absolute; z-index: 0; overflow: hidden; border-radius: 16px; pointer-events: none; background: #0b0d12; }
 .now-bg .now-bg-covers { inset: -30%; opacity: .9; }
+.now-bg .now-bg-cover, .now-bg .now-blob { animation: none; transition: none; }
 .now-bg .blob-a { left: 45%; top: -40%; width: 90%; height: 120%; }
 .now-bg .blob-b { left: -30%; top: 30%; width: 80%; height: 110%; }
 .now-bg .shade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(6, 7, 10, .35) 0%, rgba(6, 7, 10, .2) 40%, rgba(6, 7, 10, .62) 100%); }
@@ -68,10 +62,6 @@ body.hidden-view *, body.hidden-view *::before, body.hidden-view *::after { anim
   --accent-text: #ffcc00; --like: #ff5a36; --border: rgba(255, 255, 255, .2); }
 .card.now.art-bg .meta .artist { color: rgba(255, 255, 255, .78); }
 .card.now.art-bg .meta .title { text-shadow: 0 2px 14px rgba(0, 0, 0, .35); }
-@media (prefers-reduced-motion: reduce) {
-  .now .head.pop :is(.meta, .art) { animation: none !important; }
-  .now .vinyl { transition: none; }
-}
 
 .cover { width: 64px; height: 64px; border-radius: 10px; flex: none; background-color: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
@@ -90,9 +80,7 @@ body.hidden-view *, body.hidden-view *::before, body.hidden-view *::after { anim
 
 /* In a narrow panel the cover shrinks to leave enough room for the text beside it. */
 @media (max-width: 240px) {
-  .now .cover { width: 48px; height: 48px; }
-  .now .art { --c: 48px; width: calc(var(--c) * 1.25); }
-  body.record-out .now .vinyl { transform: translateX(calc(var(--c) * .3)); }
+  .now .art { --c: 48px; }
 }
 /* The like button sits in the volume row so the title and artist get the full width. */
 .like { width: 34px; height: 34px; flex: none; margin: -9px -8px -9px 0; border: none; border-radius: 50%; background: transparent; color: var(--muted); display: flex; align-items: center; justify-content: center; padding: 0; }

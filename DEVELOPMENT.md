@@ -66,9 +66,10 @@ node .probe/service-check.js   # service: two clients, playback survives one clo
 directory (`vscode-yandex-music-service-*.sock`), joins it with an `attach`
 message (a remote without settings: the token stays as the windows set it) and
 runs the same calls as a window. A connected app keeps the service running.
-The now-playing art (blurred cover background, record, breathing cover, progress
-bar shapes, the cover's palette) is shared with the player panel:
-`media/nowArt.js` is bundled into the app, and `media/nowArt.css` is copied next to it.
+The now-playing art (blurred cover background, cover placeholders, progress bar
+shapes, the cover's palette, and the record and breathing cover that only the app
+shows) is shared with the player panel: `media/nowArt.js` is bundled into the
+app, and `media/nowArt.css` and the placeholders are copied next to it.
 
 When no service answers, the app starts one itself (`remote/src/launch.ts`): it
 finds the newest copy of the extension in `~/.vscode/extensions` (or Insiders,

@@ -1,5 +1,5 @@
 // @ts-check
-import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, paletteOf, preloadCover, recordOut, showCover } from './nowArt.js';
+import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, preloadCover, showCover } from './nowArt.js';
 
 (function () {
   // @ts-ignore
@@ -104,7 +104,7 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     const vol = Math.round(audio.volume * 100);
     const head = cur
       ? `<div class="head">
-          <div class="art"><div class="vinyl"><div class="now-disc disc" id="disc"><div class="now-disc-label" id="vinylLabel"></div><div class="now-disc-hole"></div></div><div class="now-shine"></div></div><div class="cover now-cover now-breathe" id="cover"></div></div>
+          <div class="art"><div class="cover now-cover" id="cover"></div></div>
           <div class="meta">
             ${s.source || s.ai ? `<div class="source" title="${esc(s.source)}">${s.ai ? '<span class="ai-badge" title="Likely AI-generated, according to slopless.art">AI</span>' : ''}${/^(My Vibe|Station|Radio)/.test(s.source) ? I.wave(14) : ''}<span>${esc(s.sourceShort || s.source)}</span></div>` : ''}
             <div class="title" title="${esc(cur.title)}">${esc(cur.title)}</div>
@@ -180,10 +180,6 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     document.querySelectorAll('#bars i').forEach((b, i) => {
       /** @type {HTMLElement} */ (b).style.height = `${heights[i] * 100}%`;
     });
-    // The rebuilt record goes on turning from where the previous one was, in whole steps.
-    trackTurn();
-    const disc = document.getElementById('disc');
-    if (disc) disc.style.animationDelay = `${-Math.round((turnedMs % TURN_MS) / FRAME_MS) * FRAME_MS}ms`;
     document.querySelectorAll('[data-bg]').forEach((el) => { /** @type {HTMLElement} */ (el).style.background = /** @type {HTMLElement} */ (el).dataset.bg || ''; });
     const vol = /** @type {HTMLInputElement|null} */ (document.getElementById('vol'));
     if (vol) vol.style.setProperty('--p', `${vol.value}%`);
@@ -192,12 +188,10 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
   }
 
   // ------------------------------------------------------------------ now playing card art
-  // The card's background lives outside #app, which is rebuilt on every state change, so its
-  // slow drift and the cross-fade between covers aren't restarted; it follows the card's box.
+  // The card's background lives outside #app, which is rebuilt on every state change, so it
+  // isn't redrawn with it; it follows the card's box.
   const nowBg = /** @type {HTMLElement} */ (document.getElementById('nowBg'));
   const coverLayers = new CoverLayers(/** @type {HTMLElement} */ (document.getElementById('artLayers')));
-  const showRecord = recordOut(document.body);
-  let artTrackId = null;
   let artCover = null;
   const cardObserver = new ResizeObserver(() => placeBg());
 
@@ -210,23 +204,14 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     Object.assign(nowBg.style, { top: `${r.top - b.top}px`, left: `${r.left - b.left}px`, width: `${r.width}px`, height: `${r.height}px` });
   }
 
-  /** Sets the record's label and the card's background to the current cover; animates a track change. */
+  /** Sets the card's cover and background to the current track's cover. */
   function showArt(cur) {
     const card = document.querySelector('.card.now');
     if (card) cardObserver.observe(card);
-    const label = document.getElementById('vinylLabel');
-    if (label && cur && cur.cover) label.style.backgroundImage = `url("${cur.cover}")`;
     const coverEl = document.getElementById('cover');
     if (coverEl) showCover(coverEl, cur && cur.cover);
     const next = state.queue[state.index + 1];
     preloadCover(next && next.cover);
-    const id = cur ? cur.id : null;
-    if (id !== artTrackId) {
-      const first = artTrackId === null;
-      artTrackId = id;
-      const head = document.querySelector('.now .head');
-      if (head && !first) head.classList.add('pop');
-    }
     const url = cur && cur.cover ? cur.cover : null;
     if (url !== artCover) {
       artCover = url;
@@ -240,18 +225,6 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     placeBg();
   }
   window.addEventListener('resize', placeBg);
-
-  /** One turn of the record in nowArt.css. */
-  const TURN_MS = 3600;
-  /** How long the record has turned, so that a rebuilt card's record starts where the last one was. */
-  let turnedMs = 0;
-  /** @type {number|null} */
-  let turningSince = null;
-  function trackTurn() {
-    const now = performance.now();
-    if (turningSince !== null) turnedMs += now - turningSince;
-    turningSince = isPlaying() ? now : null;
-  }
 
   /**
    * Waveform fill: bar i covers the track segment [i, i+1) / BARS and is filled by
@@ -293,8 +266,6 @@ import { CoverLayers, FRAME_MS, alignNewAnimations, alignToFrames, barHeights, p
     if (dur) dur.textContent = fmt(duration());
     if (seek && !seeking) seek.value = String(Math.round(frac * 1000));
     paintBars();
-    trackTurn();
-    showRecord(isPlaying());
     if (document.body.classList.contains('playing') !== isPlaying()) {
       document.body.classList.toggle('playing', isPlaying());
       // Resumed animations start anew, off the 30 Hz grid.
