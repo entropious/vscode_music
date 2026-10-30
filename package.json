@@ -2,7 +2,7 @@
   "name": "vscode-yandex-music",
   "displayName": "Yandex Music Player",
   "description": "Listen to Yandex Music in VS Code: My Vibe, Liked, playlists and search.",
-  "version": "0.7.1",
+  "version": "0.8.0",
   "publisher": "entro",
   "license": "MIT",
   "pricing": "Free",
