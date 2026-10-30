@@ -121,6 +121,12 @@
         "command": "yandexMusic.playPlaylist",
         "title": "Play a Playlist…",
         "category": "Yandex Music"
+      },
+      {
+        "command": "yandexMusic.openRemote",
+        "title": "Open Fullscreen Remote",
+        "category": "Yandex Music",
+        "icon": "$(screen-full)"
       }
     ],
     "keybindings": [
@@ -180,6 +186,21 @@
           "description": "Yandex OAuth server endpoint. Change it only for debugging."
         }
       }
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "yandexMusic.openRemote",
+          "when": "view == yandexMusic.player && yandexMusic.remoteInstalled",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "yandexMusic.openRemote",
+          "when": "yandexMusic.remoteInstalled"
+        }
+      ]
     }
   },
   "scripts": {
