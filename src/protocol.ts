@@ -37,6 +37,10 @@ export interface ServiceSettings {
   /** Mark AI-generated tracks via slopless.art. */
   aiLabels: boolean;
   sloplessBaseUrl: string;
+  /** For the fullscreen remote: Apple Music's motion covers; on unless a window says otherwise. */
+  motionCovers?: boolean;
+  /** For the fullscreen remote: finer genres from MusicBrainz; on unless a window says otherwise. */
+  detailedGenres?: boolean;
 }
 
 /** Messages between windows and the leader window or the service, one JSON object per line. */

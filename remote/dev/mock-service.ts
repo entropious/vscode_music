@@ -55,6 +55,18 @@ const state: SharedState = {
   streamInfo: 'MP3 320 kbps',
   slop: { '1008': true, '1001': false },
   volume: 0.7,
+  // Real videos, so the remote's players can be tried: a motion cover from Apple Music (HLS,
+  // square), a music video on YouTube, a Yandex video shot (HEVC: plays on a Mac, not under
+  // Linux's Chromium, where the cover stays).
+  visuals: {
+    '1000': {
+      genre: { id: 'electronics', title: 'Electronic', color: '#3FB7FF' },
+      tags: ['french house', 'big beat', 'electro'],
+      motionCover: 'https://mvod.itunes.apple.com/itunes-assets/HLSMusic116/v4/ca/94/22/ca9422a4-30a3-6c7f-7c24-d02958d82742/P544849304_default.m3u8',
+    },
+    '1001': { genre: { id: 'pop', title: 'Pop', color: '#FF4F9A' }, youtubeId: 'dQw4w9WgXcQ' },
+    '1002': { genre: { id: 'rusrap', title: 'Russian Rap' }, video: 'https://music-background-videos.s3.yandex.net/converted/60018e4cdcaa9a42948cda8d' },
+  },
 };
 const status: PlaybackStatus = { playing: !args.has('--paused'), position: 37, duration: 154, trackId: '1000:2000' };
 

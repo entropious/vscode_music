@@ -49,6 +49,8 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
         volume: config().get<number>('volume', 0.7),
         aiLabels: config().get<boolean>('aiLabels', true),
         sloplessBaseUrl: config().get<string>('sloplessBaseUrl', SLOPLESS_API),
+        motionCovers: config().get<boolean>('remote.motionCovers', true),
+        detailedGenres: config().get<boolean>('remote.detailedGenres', true),
       }),
     );
     const s = service;
@@ -61,6 +63,34 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   const onTokenChanged = async () => {
     await service?.sendSettings();
     await player.refreshAccount();
+  };
+
+  /**
+   * Saves what Yandex Music's API says about the current track's videos into a file and opens
+   * it: the track itself, its clips, its supplement and the artist's brief info. These show
+   * what the fullscreen remote could play, e.g. how a full music video is reached.
+   */
+  const saveVideoInfo = async () => {
+    const track = player.core.current();
+    if (!track) {
+      vscode.window.showInformationMessage('Play a track first.');
+      return;
+    }
+    const client = await clientFactory();
+    const id = track.id.split(':')[0];
+    const ask = (path: string) => client.raw(path).catch((e) => ({ error: e instanceof Error ? e.message : String(e) }));
+    const raw = (await client.raw(`/tracks/${id}`).catch(() => [])) as any[];
+    const clipIds: number[] = raw?.[0]?.clipIds ?? [];
+    const artistId = track.artists[0]?.id;
+    const info = {
+      track: raw?.[0],
+      clips: clipIds.length ? await ask(`/clips?clipIds=${clipIds.join(',')}`) : 'the track has no clipIds',
+      supplement: await ask(`/tracks/${id}/supplement`),
+      artistBriefInfo: artistId === undefined ? undefined : await ask(`/artists/${artistId}/brief-info`),
+    };
+    const file = vscode.Uri.joinPath(context.globalStorageUri, `video-info-${id}.json`);
+    await vscode.workspace.fs.writeFile(file, Buffer.from(JSON.stringify(info, null, 2)));
+    await vscode.window.showTextDocument(file);
   };
 
   /** Where Yandex Music Remote, the fullscreen app in `remote/`, is installed on macOS. */
@@ -169,6 +199,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     // Clicking a status bar item leaves it focused, and showHover shows the focused
     // item's tooltip, which is the mini player card.
     vscode.commands.registerCommand('yandexMusic.openRemote', guard(openRemote)),
+    vscode.commands.registerCommand('yandexMusic.saveVideoInfo', guard(saveVideoInfo)),
     vscode.commands.registerCommand('yandexMusic.showCard', () => vscode.commands.executeCommand('workbench.action.showHover')),
     vscode.commands.registerCommand('yandexMusic.playPause', guard(() => player.playPause())),
     vscode.commands.registerCommand('yandexMusic.next', guard(() => player.next())),

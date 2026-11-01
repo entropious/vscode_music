@@ -11,6 +11,8 @@ export interface Artist {
 export interface Album {
   id: number | string;
   title: string;
+  /** The album's genre, the ID of one in `/genres`: `rusrap`, `electronics`. */
+  genre?: string;
 }
 
 export interface Track {
@@ -22,6 +24,39 @@ export interface Track {
   albums: Album[];
   coverUri?: string;
   available?: boolean;
+  /** A short looping vertical video (a "video shot"), MP4 on Yandex's storage. */
+  backgroundVideoUri?: string;
+  /** The track's music videos, for `/clips`. */
+  clipIds?: number[];
+  isrc?: string;
+}
+
+/** A genre from `/genres`, with its subgenres flattened in. */
+export interface Genre {
+  id: string;
+  title: string;
+  /** The Russian title. */
+  titleRu?: string;
+  color?: string;
+}
+
+/** A music video of a track. */
+export interface Clip {
+  id: number;
+  title: string;
+  /** A short preview, MP4. */
+  previewUrl?: string;
+  thumbnail?: string;
+  /** Seconds. */
+  duration?: number;
+}
+
+/** A video of a track elsewhere, from `/tracks/{id}/supplement`. */
+export interface SupplementVideo {
+  provider: string;
+  /** The video's ID on the provider, such as YouTube's. */
+  providerVideoId?: string;
+  title?: string;
 }
 
 export interface Playlist {
@@ -281,6 +316,49 @@ export class YandexMusicClient {
     return (r.sequence ?? []).map((s: any) => normalizeTrack(s.track));
   }
 
+  /** All genres with their subgenres, named in English and Russian. */
+  async genres(): Promise<Genre[]> {
+    const r = await this.request<any[]>('/genres');
+    const flat = (list: any[]): any[] => list.flatMap((g) => [g, ...flat(g.subGenres ?? [])]);
+    // Each genre carries its titles in every language; `title` is in the request's (Russian).
+    return flat(Array.isArray(r) ? r : []).map((g) => ({
+      id: String(g.id),
+      title: String(g.titles?.en?.title ?? g.title ?? g.id),
+      titleRu: g.titles?.ru?.title ?? g.title,
+      color: typeof g.color === 'string' ? g.color : undefined,
+    }));
+  }
+
+  async clips(ids: number[]): Promise<Clip[]> {
+    if (!ids.length) {
+      return [];
+    }
+    const r = await this.request<any[]>(`/clips?${new URLSearchParams({ clipIds: ids.join(',') })}`);
+    return (Array.isArray(r) ? r : []).map((c) => ({
+      id: Number(c.clipId),
+      title: String(c.title ?? ''),
+      previewUrl: c.previewUrl,
+      thumbnail: c.thumbnail ? coverUrl(c.thumbnail, 400) : undefined,
+      duration: c.duration,
+    }));
+  }
+
+  /** The artist's background video, shown on their page in Yandex Music's apps. */
+  async artistVideo(artistId: Artist['id']): Promise<string | undefined> {
+    const r = await this.request<any>(`/artists/${artistId}/brief-info`);
+    return r?.backgroundVideoUrl ?? r?.artist?.backgroundVideoUrl ?? undefined;
+  }
+
+  async supplementVideos(trackId: string): Promise<SupplementVideo[]> {
+    const r = await this.request<any>(`/tracks/${trackId.split(':')[0]}/supplement`);
+    return (r?.videos ?? []).map((v: any) => ({ provider: String(v.provider ?? ''), providerVideoId: v.providerVideoId ? String(v.providerVideoId) : undefined, title: v.title }));
+  }
+
+  /** A raw API response, for finding out what the API sends (see the saveVideoInfo command). */
+  raw(path: string): Promise<unknown> {
+    return this.request<unknown>(path);
+  }
+
   /** Returns a direct stream link for the track, preferring MP3 over other codecs. */
   async streamUrl(trackId: string, quality: 'high' | 'low' = 'high'): Promise<{ url: string; preview: boolean; codec: string; bitrate: number }> {
     const id = trackId.split(':')[0];
@@ -313,7 +391,7 @@ export function buildDirectLink(d: { host: string; path: string; ts: string; s: 
 }
 
 export function normalizeTrack(t: any): Track {
-  const albums: Album[] = (t.albums ?? []).map((a: any) => ({ id: a.id, title: a.title }));
+  const albums: Album[] = (t.albums ?? []).map((a: any) => ({ id: a.id, title: a.title, genre: a.genre }));
   const id = albums.length && !String(t.id).includes(':') ? `${t.id}:${albums[0].id}` : String(t.id);
   return {
     id,
@@ -324,6 +402,9 @@ export function normalizeTrack(t: any): Track {
     albums,
     coverUri: t.coverUri ?? t.ogImage,
     available: t.available !== false,
+    backgroundVideoUri: t.backgroundVideoUri || undefined,
+    clipIds: Array.isArray(t.clipIds) && t.clipIds.length ? t.clipIds.map(Number) : undefined,
+    isrc: t.isrc || undefined,
   };
 }
 

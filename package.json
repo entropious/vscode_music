@@ -127,6 +127,11 @@
         "title": "Open Fullscreen Remote",
         "category": "Yandex Music",
         "icon": "$(screen-full)"
+      },
+      {
+        "command": "yandexMusic.saveVideoInfo",
+        "title": "Save Video Info of the Current Track (for debugging)",
+        "category": "Yandex Music"
       }
     ],
     "keybindings": [
@@ -169,6 +174,16 @@
           "type": "boolean",
           "default": true,
           "description": "Mark tracks that are likely AI-generated. Each track is looked up on slopless.art, a public database of AI music on Yandex Music."
+        },
+        "yandexMusic.remote.motionCovers": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fullscreen remote: show Apple Music's motion cover of the album when the track has no video. The album is looked up on the iTunes Search API and music.apple.com."
+        },
+        "yandexMusic.remote.detailedGenres": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fullscreen remote: show finer genres from MusicBrainz, looked up by the track's ISRC."
         },
         "yandexMusic.sloplessBaseUrl": {
           "type": "string",

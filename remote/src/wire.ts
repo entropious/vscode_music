@@ -82,6 +82,18 @@ export interface SharedState {
   streamInfo?: string;
   slop?: Record<string, boolean>;
   volume?: number;
+  /** Track ID (without the album) → its videos and genres, `TrackVisuals` in `src/visuals.ts`. */
+  visuals?: Record<string, TrackVisuals>;
+}
+
+export interface TrackVisuals {
+  genre?: { id: string; title: string; titleRu?: string; color?: string };
+  tags?: string[];
+  clip?: { title: string; previewUrl: string; thumbnail?: string };
+  youtubeId?: string;
+  video?: string;
+  artistVideo?: string;
+  motionCover?: string;
 }
 
 /** Player methods a remote can run, `REMOTE_METHODS` in `src/core.ts`, with their arguments. */

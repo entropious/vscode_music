@@ -6,7 +6,7 @@
  *   electron . [--fullscreen] [--socket <path>]
  */
 import * as path from 'node:path';
-import { BrowserWindow, app, ipcMain, powerSaveBlocker, shell } from 'electron';
+import { BrowserWindow, app, ipcMain, powerSaveBlocker, session, shell } from 'electron';
 import { type BridgeEvent, CHANNEL } from './bridge.ts';
 import { ServiceLink } from './link.ts';
 import type { PlaybackStatus, RemoteMethod, SharedState } from './wire.ts';
@@ -18,6 +18,9 @@ const fixedSocket = argv.includes('--socket') ? socketArg : undefined;
 
 /** The built files; Bun's bundler fixes `__dirname` at build time, so they are found from the app's root. */
 const OUT = (): string => path.join(app.getAppPath(), 'out');
+
+/** Who embeds YouTube's player: the app's bundle ID, `appBundleId` in scripts/package.ts. */
+const YOUTUBE_REFERER = 'https://net.entro.yandex-music-remote/';
 
 let win: BrowserWindow | undefined;
 let lastState: SharedState | undefined;
@@ -119,6 +122,14 @@ if (!app.requestSingleInstanceLock()) {
     win?.focus();
   });
   void app.whenReady().then(() => {
+    // YouTube's embedded player refuses pages that don't say who embeds it (error 153), and a
+    // page loaded from a file sends no Referer; apps identify themselves by their bundle ID.
+    session.defaultSession.webRequest.onBeforeSendHeaders({ urls: ['https://www.youtube-nocookie.com/*'] }, (details, callback) => {
+      if (details.resourceType === 'subFrame') {
+        details.requestHeaders['Referer'] = YOUTUBE_REFERER;
+      }
+      callback({ requestHeaders: details.requestHeaders });
+    });
     createWindow();
     link.start();
     app.on('activate', () => {
