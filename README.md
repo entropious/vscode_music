@@ -104,7 +104,9 @@ Media keys keep working through the player service's Now Playing.
 **Videos and genres.** Where a track has a video, the remote plays it without
 sound, in this order:
 1. its music video, which fills the background: a 30-second preview from the
-   iTunes Store, or the video on YouTube that Wikidata or Genius links to;
+   iTunes Store, or the video on YouTube that Wikidata or Genius links to,
+   unless it is only the cover on a still frame (an auto-generated "Topic" or an
+   "Official Audio" upload);
 2. the track's video shot, Yandex Music's short looping video, in the cover's
    place;
 3. the artist's background video from Yandex Music;

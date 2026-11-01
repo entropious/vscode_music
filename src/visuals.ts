@@ -216,6 +216,26 @@ class WikidataVideos {
 }
 
 /**
+ * Whether a YouTube video is worth showing, by its title and channel from YouTube's oEmbed: an
+ * auto-generated "Artist - Topic" upload or an "Official Audio" one is the album's cover on a
+ * still frame, and a video YouTube won't describe is gone or can't be embedded.
+ */
+class YouTubeCheck {
+  private readonly cache = new Cache<boolean>();
+
+  isVideo(id: string): Promise<boolean> {
+    return this.cache.get(id, async () => {
+      const q = new URLSearchParams({ url: `https://www.youtube.com/watch?v=${id}`, format: 'json' });
+      const info = await getJson(`https://www.youtube.com/oembed?${q}`).catch(() => undefined);
+      if (!info) {
+        return false;
+      }
+      return !/ - Topic$/.test(String(info.author_name ?? '')) && !/\baudio\b/i.test(String(info.title ?? ''));
+    });
+  }
+}
+
+/**
  * A song's video on YouTube as Genius links it: the song is searched by artist and title, and
  * its page's media give the link. Genius wants an API token; without one nothing is looked up.
  */
@@ -261,6 +281,7 @@ export class VisualsLookup {
   private readonly appleVideos = new AppleMusicVideos();
   private readonly wikidata = new WikidataVideos();
   private readonly genius = new GeniusVideos();
+  private readonly youtube = new YouTubeCheck();
 
   constructor(client: () => Promise<YandexMusicClient>, options: () => VisualsOptions, log: Logger) {
     this.client = client;
@@ -297,13 +318,15 @@ export class VisualsLookup {
     }
     if (opts.musicVideos && artist) {
       tasks.push(['iTunes music video', async () => add({ musicVideo: await this.appleVideos.video(artist.name, track.title) })]);
-      tasks.push(['Wikidata', async () => add({ youtubeId: await this.wikidata.youtubeId(artist.name, track.title) })]);
+      /** A YouTube video found, unless it is only the cover on a still frame. */
+      const video = async (id: string | undefined) => (id && (await this.youtube.isVideo(id)) ? id : undefined);
+      tasks.push(['Wikidata', async () => add({ youtubeId: await video(await this.wikidata.youtubeId(artist.name, track.title)) })]);
       const geniusToken = opts.geniusToken;
       if (geniusToken) {
         tasks.push([
           'Genius',
           async () => {
-            const id = await this.genius.youtubeId(geniusToken, artist.name, track.title);
+            const id = await video(await this.genius.youtubeId(geniusToken, artist.name, track.title));
             // Wikidata's link is the official video; Genius sometimes links a lyric video.
             if (!found.youtubeId) {
               add({ youtubeId: id });
