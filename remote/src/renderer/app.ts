@@ -822,5 +822,9 @@ window.ym.onEvent((event) => {
 });
 
 alignNewAnimations();
+// Videos and genres are looked up only while the window is there to show them, not minimized or hidden.
+const askForVisuals = (): void => window.ym.wantVisuals(document.visibilityState === 'visible');
+document.addEventListener('visibilitychange', askForVisuals);
+askForVisuals();
 renderAll();
 window.setInterval(() => status.playing && paintProgress(), PROGRESS_TICK_MS);

@@ -321,7 +321,7 @@ core.onDidChange(() => {
   audio.nowPlaying({ title: fullTitle(track), artist: artistLine(track), duration: (track.durationMs ?? 0) / 1000 });
 });
 
-/** Connected fullscreen remote apps: only they show visuals, so they are looked up only while one is connected. */
+/** Fullscreen remote apps that show visuals now (they ask with a `visuals` message); visuals are looked up only for them. */
 const remoteApps = new Set<net.Socket>();
 const visuals = new VisualsLookup(
   async () => {
@@ -410,8 +410,14 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
         return;
       }
       accept(socket, 'remote app');
-      remoteApps.add(socket);
-      lookUpVisuals();
+      return;
+    case 'visuals':
+      if (m.want && clients.has(socket)) {
+        remoteApps.add(socket);
+        lookUpVisuals();
+      } else {
+        remoteApps.delete(socket);
+      }
       return;
     case 'adopt':
       if (core.index < 0 && m.state.index >= 0) {

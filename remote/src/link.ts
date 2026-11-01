@@ -70,6 +70,8 @@ export class ServiceLink {
   private readonly events: LinkEvents;
   /** A socket path given on the command line, for a service in another temp directory. */
   private readonly fixedSocket: string | undefined;
+  /** Whether the window shows videos and genres now, so the service looks them up; asked again on every attach. */
+  private visuals = false;
 
   constructor(events: LinkEvents, fixedSocket?: string) {
     this.events = events;
@@ -88,6 +90,14 @@ export class ServiceLink {
     this.stopped = true;
     clearTimeout(this.retry);
     this.socket?.destroy();
+  }
+
+  /** Asks the service for the tracks' videos and genres, or stops asking. */
+  wantVisuals(want: boolean): void {
+    this.visuals = want;
+    if (this.socket && this.linkState === 'connected') {
+      this.write(this.socket, { type: 'visuals', want });
+    }
   }
 
   call(method: RemoteMethod, args: unknown[]): Promise<unknown> {
@@ -182,6 +192,9 @@ export class ServiceLink {
           welcomed = true;
           clearTimeout(welcome);
           this.setLink('connected');
+          if (this.visuals) {
+            this.write(socket, { type: 'visuals', want: true });
+          }
         }
         this.handle(m);
       }

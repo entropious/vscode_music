@@ -121,6 +121,7 @@ export type Message =
   | { type: 'state'; state: SharedState }
   | { type: 'status'; status: PlaybackStatus }
   | { type: 'attach'; protocol: number }
+  | { type: 'visuals'; want: boolean }
   | { type: 'welcome' }
   | { type: 'outdated' }
   | { type: 'notice'; text: string };

@@ -111,6 +111,7 @@ ipcMain.on(CHANNEL.ready, () => {
 });
 ipcMain.on(CHANNEL.fullScreen, () => win?.setFullScreen(!win.isFullScreen()));
 ipcMain.on(CHANNEL.leaveFullScreen, () => win?.setFullScreen(false));
+ipcMain.on(CHANNEL.visuals, (_e, want: unknown) => link.wantVisuals(want === true));
 
 if (!app.requestSingleInstanceLock()) {
   app.quit();

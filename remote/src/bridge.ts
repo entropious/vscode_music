@@ -24,6 +24,8 @@ export interface Bridge {
   onEvent(listener: (event: BridgeEvent) => void): void;
   toggleFullScreen(): void;
   leaveFullScreen(): void;
+  /** Whether the window shows videos and genres now: it does while it is visible. */
+  wantVisuals(want: boolean): void;
 }
 
 export const CHANNEL = {
@@ -32,4 +34,5 @@ export const CHANNEL = {
   ready: 'ym:ready',
   fullScreen: 'ym:fullscreen',
   leaveFullScreen: 'ym:leave-fullscreen',
+  visuals: 'ym:visuals',
 } as const;

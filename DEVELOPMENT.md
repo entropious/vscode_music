@@ -83,8 +83,9 @@ starts. `YM_EXTENSION_DIR` and `YM_STORAGE_DIR` point the app at another copy,
 e.g. this repository after `npm run compile`.
 
 The service looks up the visuals of the current and the next track
-(`src/visuals.ts`) while a remote app is attached, and passes them in the shared
-state (`visuals`):
+(`src/visuals.ts`) while a remote app asks for them, and passes them in the shared
+state (`visuals`). The app asks with a `visuals` message while its window is
+visible and stops when it is minimized or hidden; attaching alone asks for nothing:
 - from Yandex Music: the video shot (`backgroundVideoUri`) in the track itself;
   the album's genre with `/genres`; the artist's
   `backgroundVideoUrl` in `/artists/{id}/brief-info`. Its music videos (`/clips`,

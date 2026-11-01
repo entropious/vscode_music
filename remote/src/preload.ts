@@ -9,6 +9,7 @@ const bridge: Bridge = {
   },
   toggleFullScreen: () => ipcRenderer.send(CHANNEL.fullScreen),
   leaveFullScreen: () => ipcRenderer.send(CHANNEL.leaveFullScreen),
+  wantVisuals: (want) => ipcRenderer.send(CHANNEL.visuals, want),
 };
 
 contextBridge.exposeInMainWorld('ym', bridge);

@@ -114,7 +114,7 @@ sound, in this order:
 
 Next to the title, the album's genre starts that genre's radio, and finer genres
 from MusicBrainz follow it. Videos and genres are looked up only while the
-remote is open. For the music videos the track's artist and title go to the
+remote's window is open and in sight, not minimized or hidden. For the music videos the track's artist and title go to the
 iTunes Search API, Wikidata and, once you give the extension a token, Genius,
 which knows the most of them: create an API client at
 [genius.com/api-clients](https://genius.com/api-clients), generate its Client

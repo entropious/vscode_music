@@ -62,6 +62,11 @@ export type Message =
    * without settings: the token and the rest stay as the windows set them.
    */
   | { type: 'attach'; protocol: number }
+  /**
+   * The fullscreen remote asks for the tracks' videos and genres while it shows them, and stops
+   * asking when its window is hidden; nothing is looked up for a remote that hasn't asked.
+   */
+  | { type: 'visuals'; want: boolean }
   /** The service accepted the window's first hello or a remote's attach: it is now its remote. */
   | { type: 'welcome' }
   /** The service turned the window away: it speaks an older protocol and must be reloaded. */
