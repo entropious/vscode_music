@@ -3,18 +3,25 @@ import Hls from 'hls.js/light';
 import type { TrackVisuals } from '../wire.ts';
 
 /** One video to show for a track. */
-export type Visual = { kind: 'clip' | 'video' | 'artistVideo' | 'motionCover'; url: string } | { kind: 'youtube'; id: string };
+export type Visual = { kind: 'musicVideo' | 'clip' | 'video' | 'artistVideo' | 'motionCover'; url: string } | { kind: 'youtube'; id: string };
 
-/** The video to show, in order of preference: a music video, the track's own video shot, the artist's video, the album's motion cover. */
+/**
+ * The video to show, in order of preference: a music video (the iTunes Store's preview, the
+ * one on YouTube, Yandex Music's short preview), the track's own video shot, the artist's
+ * video, the album's motion cover.
+ */
 export function pickVisual(v: TrackVisuals | undefined): Visual | undefined {
   if (!v) {
     return undefined;
   }
-  if (v.clip) {
-    return { kind: 'clip', url: v.clip.previewUrl };
+  if (v.musicVideo) {
+    return { kind: 'musicVideo', url: v.musicVideo };
   }
   if (v.youtubeId) {
     return { kind: 'youtube', id: v.youtubeId };
+  }
+  if (v.clip) {
+    return { kind: 'clip', url: v.clip.previewUrl };
   }
   if (v.video) {
     return { kind: 'video', url: v.video };
@@ -70,7 +77,7 @@ export class VideoStage {
     if (visual.kind === 'youtube') {
       this.showYouTube(visual.id, position);
     } else {
-      this.showVideo(visual.url);
+      this.showVideo(visual.url, visual.kind === 'musicVideo' || visual.kind === 'clip');
     }
   }
 
@@ -122,7 +129,8 @@ export class VideoStage {
     }
   }
 
-  private showVideo(url: string): void {
+  /** A music video always goes to the background; another video goes there only if it is wide. */
+  private showVideo(url: string, background: boolean): void {
     const video = document.createElement('video');
     video.className = 'visual';
     video.muted = true;
@@ -137,7 +145,7 @@ export class VideoStage {
       if (this.video !== video) {
         return;
       }
-      const wide = video.videoWidth / Math.max(1, video.videoHeight) > 1.2;
+      const wide = background || video.videoWidth / Math.max(1, video.videoHeight) > 1.2;
       (wide ? this.background : this.tile).append(video);
       this.onPlace(wide ? 'background' : 'tile');
       this.apply();

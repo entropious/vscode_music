@@ -180,6 +180,11 @@
           "default": true,
           "description": "Fullscreen remote: show Apple Music's motion cover of the album when the track has no video. The album is looked up on the iTunes Search API and music.apple.com."
         },
+        "yandexMusic.remote.musicVideos": {
+          "type": "boolean",
+          "default": true,
+          "description": "Fullscreen remote: show the track's music video, silent, behind the player: a 30-second preview from the iTunes Search API, or the YouTube video that Wikidata links."
+        },
         "yandexMusic.remote.detailedGenres": {
           "type": "boolean",
           "default": true,

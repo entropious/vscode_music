@@ -3,8 +3,9 @@ import type { Logger } from './core';
 
 /**
  * What the fullscreen remote shows besides the cover: videos of a track and its genres. The
- * remote picks one video by its own order (a music video, the track's video shot, the artist's
- * video, Apple Music's motion cover); the rest is there for it to fall back on.
+ * remote picks one video by its own order (a music video from the iTunes Store or Yandex Music,
+ * the track's video shot, the artist's video, Apple Music's motion cover); the rest is there for
+ * it to fall back on. Every video plays without sound.
  */
 export interface TrackVisuals {
   /** The album's genre, with its names and color from `/genres`. */
@@ -13,7 +14,9 @@ export interface TrackVisuals {
   tags?: string[];
   /** A music video on Yandex Music: its short preview. */
   clip?: { title: string; previewUrl: string; thumbnail?: string };
-  /** A music video on YouTube, as Yandex Music links it. */
+  /** A music video in the iTunes Store: its 30-second preview, MP4. */
+  musicVideo?: string;
+  /** A music video on YouTube, as Yandex Music links it, or else as Wikidata does. */
   youtubeId?: string;
   /** The track's video shot: a short looping vertical video, MP4. */
   video?: string;
@@ -26,6 +29,7 @@ export interface TrackVisuals {
 /** Which lookups outside Yandex Music the user allows. */
 export interface VisualsOptions {
   motionCovers: boolean;
+  musicVideos: boolean;
   detailedGenres: boolean;
 }
 
@@ -158,8 +162,63 @@ class AppleMotion {
 }
 
 /**
- * Looks up a track's visuals in Yandex Music and, as the user allows, MusicBrainz and Apple
- * Music. Each source reports as soon as it answers; a source that fails is left out.
+ * A track's music video in the iTunes Store, found with the iTunes Search API by artist and
+ * title. The API gives only a 30-second preview of it, which is enough for a background. A
+ * studio video is preferred to a live one.
+ */
+class AppleMusicVideos {
+  private readonly cache = new Cache<string | undefined>();
+
+  video(artist: string, title: string): Promise<string | undefined> {
+    return this.cache.get(`${artist}\n${title}`, async () => {
+      const term = new URLSearchParams({ term: `${artist} ${title}`, entity: 'musicVideo', limit: '10', country: 'us' });
+      const results: any[] = (await getJson(`https://itunes.apple.com/search?${term}`))?.results ?? [];
+      const t = plain(title);
+      const by = plain(artist);
+      const matches = results.filter((r) => {
+        const who = plain(String(r.artistName ?? ''));
+        return t && r.previewUrl && plain(String(r.trackName ?? '')) === t && who && (who.includes(by) || by.includes(who));
+      });
+      const live = (r: any) => /\blive\b/i.test(String(r.trackName ?? ''));
+      const best = matches.find((r) => !live(r)) ?? matches[0];
+      return best ? String(best.previewUrl) : undefined;
+    });
+  }
+}
+
+/**
+ * A song's video on YouTube as Wikidata knows it (property P1651): the song is searched by its
+ * title, and of the items found the one whose performer is the artist is taken.
+ */
+class WikidataVideos {
+  private readonly cache = new Cache<string | undefined>();
+
+  youtubeId(artist: string, title: string): Promise<string | undefined> {
+    return this.cache.get(`${artist}\n${title}`, async () => {
+      const search = new URLSearchParams({ action: 'wbsearchentities', search: title, language: 'en', type: 'item', limit: '10', format: 'json' });
+      const ids: string[] = ((await getJson(`https://www.wikidata.org/w/api.php?${search}`))?.search ?? []).map((s: any) => String(s.id)).filter((id: string) => /^Q\d+$/.test(id));
+      if (!ids.length) {
+        return undefined;
+      }
+      const query = `SELECT ?item ?yt ?performer WHERE {
+        VALUES ?item { ${ids.map((id) => `wd:${id}`).join(' ')} }
+        ?item wdt:P1651 ?yt; wdt:P175 ?p. ?p rdfs:label ?performer. FILTER(LANG(?performer) = "en")
+      }`;
+      const rows: any[] = (await getJson(`https://query.wikidata.org/sparql?${new URLSearchParams({ query, format: 'json' })}`))?.results?.bindings ?? [];
+      const by = plain(artist);
+      // The search ranks the items; the first of them by the artist wins.
+      const match = ids
+        .map((id) => rows.find((r) => String(r.item?.value).endsWith(`/${id}`) && by && plain(String(r.performer?.value ?? '')) === by))
+        .find((r) => r);
+      return match ? String(match.yt.value) : undefined;
+    });
+  }
+}
+
+/**
+ * Looks up a track's visuals in Yandex Music and, as the user allows, MusicBrainz, Apple Music,
+ * the iTunes Store and Wikidata. Each source reports as soon as it answers; a source that fails
+ * is left out.
  */
 export class VisualsLookup {
   private readonly client: () => Promise<YandexMusicClient>;
@@ -169,6 +228,8 @@ export class VisualsLookup {
   private readonly artistVideos = new Cache<string | undefined>();
   private readonly musicBrainz = new MusicBrainz();
   private readonly apple = new AppleMotion();
+  private readonly appleVideos = new AppleMusicVideos();
+  private readonly wikidata = new WikidataVideos();
 
   constructor(client: () => Promise<YandexMusicClient>, options: () => VisualsOptions, log: Logger) {
     this.client = client;
@@ -210,6 +271,19 @@ export class VisualsLookup {
     }
     if (opts.motionCovers && artist && album) {
       tasks.push(['Apple Music', async () => add({ motionCover: await this.apple.cover(artist.name, album.title) })]);
+    }
+    if (opts.musicVideos && artist) {
+      tasks.push(['iTunes music video', async () => add({ musicVideo: await this.appleVideos.video(artist.name, track.title) })]);
+      tasks.push([
+        'Wikidata',
+        async () => {
+          const id = await this.wikidata.youtubeId(artist.name, track.title);
+          // Yandex Music's own link to YouTube comes first.
+          if (!found.youtubeId) {
+            add({ youtubeId: id });
+          }
+        },
+      ]);
     }
     await Promise.all(
       tasks.map(([name, task]) =>

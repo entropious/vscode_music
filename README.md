@@ -103,8 +103,9 @@ Media keys keep working through the player service's Now Playing.
 
 **Videos and genres.** Where a track has a video, the remote plays it without
 sound, in this order:
-1. its music video: Yandex Music's preview of it, or the video on YouTube that
-   Yandex links to; it fills the background;
+1. its music video, which fills the background: a 30-second preview from the
+   iTunes Store, the video on YouTube that Yandex Music or else Wikidata links
+   to, or Yandex Music's short preview of it;
 2. the track's video shot, Yandex Music's short looping video, in the cover's
    place;
 3. the artist's background video from Yandex Music;
@@ -112,10 +113,12 @@ sound, in this order:
 
 Next to the title, the album's genre starts that genre's radio, and finer genres
 from MusicBrainz follow it. Videos and genres are looked up only while the
-remote is open. For the motion covers the album is looked up on the iTunes
-Search API and its page on music.apple.com; for the finer genres, the track's
-ISRC goes to MusicBrainz. Turn these off with `yandexMusic.remote.motionCovers`
-and `yandexMusic.remote.detailedGenres`. With reduced motion turned on in macOS,
+remote is open. For the music videos the track's artist and title go to the
+iTunes Search API and Wikidata; for the motion covers the album is looked up on
+the iTunes Search API and its page on music.apple.com; for the finer genres, the
+track's ISRC goes to MusicBrainz. Turn these off with
+`yandexMusic.remote.musicVideos`, `yandexMusic.remote.motionCovers` and
+`yandexMusic.remote.detailedGenres`. With reduced motion turned on in macOS,
 the remote plays no videos.
 
 ## AI-generated music
@@ -136,6 +139,7 @@ queue and search results are looked up there; turn this off with
 | `yandexMusic.quality` | `high` | `high` picks the highest MP3 bitrate available, `low` the lowest. |
 | `yandexMusic.volume` | `0.7` | Volume, 0–1. |
 | `yandexMusic.aiLabels` | `true` | Mark likely AI-generated tracks, looked up on slopless.art. |
+| `yandexMusic.remote.musicVideos` | `true` | Fullscreen remote: music videos, silent, from the iTunes Store and YouTube via Wikidata. |
 | `yandexMusic.remote.motionCovers` | `true` | Fullscreen remote: Apple Music's motion covers for tracks without a video. |
 | `yandexMusic.remote.detailedGenres` | `true` | Fullscreen remote: finer genres from MusicBrainz. |
 

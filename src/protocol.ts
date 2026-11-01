@@ -39,6 +39,8 @@ export interface ServiceSettings {
   sloplessBaseUrl: string;
   /** For the fullscreen remote: Apple Music's motion covers; on unless a window says otherwise. */
   motionCovers?: boolean;
+  /** For the fullscreen remote: music videos from the iTunes Store and Wikidata; on unless a window says otherwise. */
+  musicVideos?: boolean;
   /** For the fullscreen remote: finer genres from MusicBrainz; on unless a window says otherwise. */
   detailedGenres?: boolean;
 }
