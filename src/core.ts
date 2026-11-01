@@ -1,6 +1,7 @@
 import type { Account, Playlist, Station, Track, WaveBatch, WaveEvent, YandexMusicClient } from './api';
 import { WAVE_SEED, artistLine, fullTitle } from './api';
 import type { SlopChecker } from './slop';
+import type { TrackVisuals } from './visuals';
 
 export type Source =
   | { kind: 'wave' }
@@ -83,6 +84,9 @@ export const REMOTE_METHODS = [
 ] as const;
 export type RemoteMethod = (typeof REMOTE_METHODS)[number];
 
+/** How many tracks' visuals the state carries besides the newest. */
+const VISUALS_KEPT = 7;
+
 /** How many tracks after the current one get AI marks ahead of time, so the queue shows them. */
 const SLOP_LOOKAHEAD = 25;
 
@@ -128,6 +132,8 @@ export interface SharedState {
   audioUnlocked: boolean;
   /** Volume, 0–1, once something has set it; the fullscreen remote shows it. */
   volume?: number;
+  /** Track ID (without the album) → its videos and genres; the macOS service finds them while the fullscreen remote is connected. */
+  visuals?: Record<string, TrackVisuals>;
 }
 
 /** Where the audio actually plays: a webview's <audio> element or the macOS service's AVPlayer. */
@@ -223,6 +229,7 @@ export class PlayerCore {
   streamInfo?: string;
   audioUnlocked = false;
   volume?: number;
+  visuals: Record<string, TrackVisuals> = {};
   slop: Record<string, boolean> = {};
   /** Tracks being looked up on slopless.art right now. */
   private readonly slopPending = new Set<string>();
@@ -274,6 +281,7 @@ export class PlayerCore {
       slop: this.slop,
       audioUnlocked: this.audioUnlocked,
       volume: this.volume,
+      visuals: this.visuals,
     };
   }
 
@@ -294,12 +302,21 @@ export class PlayerCore {
     this.slop = s.slop ?? {};
     this.audioUnlocked = s.audioUnlocked;
     this.volume = s.volume;
+    this.visuals = s.visuals ?? {};
     this.changed();
   }
 
   applyPlaybackStatus(status: PlaybackStatus): void {
     this.status = status;
     this.changed('status');
+  }
+
+  /** Sets a track's visuals; only the last few tracks' are kept. */
+  setVisuals(trackId: string, visuals: TrackVisuals): void {
+    const id = baseId(trackId);
+    const kept = Object.entries(this.visuals).filter(([k]) => k !== id).slice(-VISUALS_KEPT);
+    this.visuals = Object.fromEntries([...kept, [id, visuals]]);
+    this.changed();
   }
 
   /** The audio output stopped playing this window's stream, e.g. its webview was closed. */

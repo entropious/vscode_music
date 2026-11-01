@@ -1,5 +1,6 @@
 import type { Bridge, LinkState } from '../bridge.ts';
 import { type PlaybackStatus, type RemoteMethod, type RemoteMethods, type SharedState, type Source, type Track, artistLine, baseId, coverUrl, fullTitle } from '../wire.ts';
+import { VideoStage, pickVisual } from './visuals.ts';
 import { CoverLayers, DEFAULT_PALETTE, type Palette, alignNewAnimations, alignToFrames, barHeights, paletteOf, preloadCover, recordOut, showCover } from '../../../media/nowArt.js';
 
 declare global {
@@ -123,8 +124,16 @@ const panes: Record<Tab, HTMLElement> = { queue: el('queuePane'), playlists: el(
 const query = el<HTMLInputElement>('query');
 const searchHint = el('searchHint');
 const searchList = el('searchList');
+const genreBtn = el<HTMLButtonElement>('genreBtn');
+const tagsEl = el('tags');
 const toastEl = el('toast');
 const overlay = el('overlay');
+
+/** Videos stay off for those who asked for less motion; the cover stays. */
+const stillPictures = window.matchMedia('(prefers-reduced-motion: reduce)');
+const videos = new VideoStage(el('bgVideo'), el('tileVideo'), (place) => {
+  root.dataset['video'] = place ?? '';
+});
 
 const barEls: HTMLElement[] = [];
 for (let i = 0; i < BARS; i++) {
@@ -319,6 +328,18 @@ function renderNow(): void {
     // Resumed animations start anew, off the 30 Hz grid.
     alignToFrames(root);
   }
+  const visuals = t ? state?.visuals?.[baseId(t.id)] : undefined;
+  videos.show(stillPictures.matches ? undefined : pickVisual(visuals), position());
+  videos.follow(playing, position());
+  const genre = visuals?.genre;
+  setHidden(genreBtn, !genre);
+  if (genre) {
+    setText(el('genreName'), genre.title);
+    setAttr(genreBtn, 'title', `Play ${genre.title} radio`);
+    genreBtn.style.setProperty('--genre', genre.color && /^#[0-9a-f]{3,8}$/i.test(genre.color) ? genre.color : '');
+  }
+  setText(tagsEl, (visuals?.tags ?? []).slice(0, 3).join(' · '));
+
   const titleText = t ? fullTitle(t) : 'Nothing is playing';
   if (title.textContent !== titleText) {
     title.textContent = titleText;
@@ -678,6 +699,13 @@ for (const k of Object.keys(tabs) as Tab[]) {
   tabs[k].addEventListener('click', () => openDrawer(true, k));
 }
 radioBtn.addEventListener('click', () => void run('startTrackRadio'));
+genreBtn.addEventListener('click', () => {
+  const t = current();
+  const genre = t ? state?.visuals?.[baseId(t.id)]?.genre : undefined;
+  if (genre) {
+    void run('playSource', { kind: 'station', id: `genre:${genre.id}`, name: genre.title });
+  }
+});
 upNext.addEventListener('click', () => void run('next'));
 playBtn.addEventListener('click', () => void run('playPause'));
 el('prevBtn').addEventListener('click', () => void run('previous'));

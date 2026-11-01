@@ -82,6 +82,25 @@ keychain (`security`, item `vscode-yandex-music`), and reads both when it
 starts. `YM_EXTENSION_DIR` and `YM_STORAGE_DIR` point the app at another copy,
 e.g. this repository after `npm run compile`.
 
+The service looks up the visuals of the current and the next track
+(`src/visuals.ts`) while a remote app is attached, and passes them in the shared
+state (`visuals`):
+- from Yandex Music: the video shot (`backgroundVideoUri`) and ISRC, both in the
+  track itself; the album's genre with `/genres`; `/clips` for the track's
+  `clipIds`; YouTube links in `/tracks/{id}/supplement`; the artist's
+  `backgroundVideoUrl` in `/artists/{id}/brief-info`;
+- from MusicBrainz, genres by ISRC, a request a second at most;
+- from Apple Music, the motion cover: the album on the iTunes Search API, then
+  the HLS playlists linked on its music.apple.com page, of which the square one.
+
+The remote plays one of them (`remote/src/renderer/visuals.ts`): an MP4 or an
+HLS stream through hls.js's light build, or YouTube's embedded player, which
+refuses a page without a Referer (error 153), so the app sends its bundle ID as
+one. A full music video isn't reached yet: the Yandex Music API gives only a
+preview and a `playerId` for Yandex's video hosting. **Yandex Music: Save Video
+Info of the Current Track** saves the API's answers about the current track's
+videos to a JSON file in the global storage, to see what there is to play.
+
 ```bash
 cd remote
 bun install

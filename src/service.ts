@@ -18,6 +18,7 @@ import { YandexMusicClient, artistLine, fullTitle } from './api';
 import { type AudioOutput, type Logger, PlayerCore, REMOTE_METHODS, errorText } from './core';
 import { Broadcaster, type Message, PROTOCOL, type ServiceSettings, readMessages, send, serviceBuild } from './protocol';
 import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
+import { VisualsLookup } from './visuals';
 
 /** How long the service keeps playing with no window connected, so reloading a window doesn't stop the music. */
 const GRACE_MS = 8000;
@@ -305,6 +306,37 @@ core.onDidChange(() => {
   audio.nowPlaying({ title: fullTitle(track), artist: artistLine(track), duration: (track.durationMs ?? 0) / 1000 });
 });
 
+/** Connected fullscreen remote apps: only they show visuals, so they are looked up only while one is connected. */
+const remoteApps = new Set<net.Socket>();
+const visuals = new VisualsLookup(
+  async () => {
+    await loaded;
+    return new YandexMusicClient(settings.apiBaseUrl, settings.token);
+  },
+  () => ({ motionCovers: settings.motionCovers !== false, detailedGenres: settings.detailedGenres !== false }),
+  log,
+);
+/** Tracks whose visuals have been looked up or are being looked up. */
+const visualsAsked = new Set<string>();
+
+/** Looks up the visuals of the current track and the next, so that the next one's are ready when it starts. */
+function lookUpVisuals(): void {
+  if (!remoteApps.size) {
+    return;
+  }
+  for (const track of [core.current(), core.queue[core.index + 1]]) {
+    if (!track || visualsAsked.has(track.id)) {
+      continue;
+    }
+    visualsAsked.add(track.id);
+    if (visualsAsked.size > 200) {
+      visualsAsked.delete(visualsAsked.values().next().value as string);
+    }
+    void visuals.lookUp(track, (v) => core.setVisuals(track.id, v)).catch((e) => log.warn(`visuals: ${errorText(e)}`));
+  }
+}
+core.onDidChange((change) => change === 'state' && lookUpVisuals());
+
 let shutdownTimer: NodeJS.Timeout | undefined = setTimeout(() => shutdown('no window connected'), FIRST_CLIENT_MS);
 
 function shutdown(reason: string): void {
@@ -363,6 +395,8 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
         return;
       }
       accept(socket, 'remote app');
+      remoteApps.add(socket);
+      lookUpVisuals();
       return;
     case 'adopt':
       if (core.index < 0 && m.state.index >= 0) {
@@ -391,6 +425,7 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
 const server = net.createServer((socket) => {
   socket.on('error', () => undefined);
   socket.on('close', () => {
+    remoteApps.delete(socket);
     if (!clients.delete(socket)) {
       return;
     }
