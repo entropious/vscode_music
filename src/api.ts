@@ -26,7 +26,6 @@ export interface Track {
   available?: boolean;
   /** A short looping vertical video (a "video shot"), MP4 on Yandex's storage. */
   backgroundVideoUri?: string;
-  isrc?: string;
 }
 
 /** A genre from `/genres`, with its subgenres flattened in. */
@@ -358,7 +357,6 @@ export function normalizeTrack(t: any): Track {
     coverUri: t.coverUri ?? t.ogImage,
     available: t.available !== false,
     backgroundVideoUri: t.backgroundVideoUri || undefined,
-    isrc: t.isrc || undefined,
   };
 }
 

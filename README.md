@@ -122,7 +122,7 @@ Access Token and enter it with **Yandex Music: Set Genius Token for Music
 Videos** (VS Code keeps it with its secrets, the player service a copy in the
 login keychain). For the motion covers the album is looked up on
 the iTunes Search API and its page on music.apple.com; for the finer genres, the
-track's ISRC goes to MusicBrainz. Turn these off with
+track's artist and title go to MusicBrainz. Turn these off with
 `yandexMusic.remote.musicVideos`, `yandexMusic.remote.motionCovers` and
 `yandexMusic.remote.detailedGenres`. With reduced motion turned on in macOS,
 the remote plays no videos.

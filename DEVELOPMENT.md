@@ -85,14 +85,16 @@ e.g. this repository after `npm run compile`.
 The service looks up the visuals of the current and the next track
 (`src/visuals.ts`) while a remote app is attached, and passes them in the shared
 state (`visuals`):
-- from Yandex Music: the video shot (`backgroundVideoUri`) and ISRC, both in the
-  track itself; the album's genre with `/genres`; the artist's
+- from Yandex Music: the video shot (`backgroundVideoUri`) in the track itself;
+  the album's genre with `/genres`; the artist's
   `backgroundVideoUrl` in `/artists/{id}/brief-info`. Its music videos (`/clips`,
   `/tracks/{id}/supplement`) are left out: few tracks have one, and what `/clips`
   gives is a 4-second preview;
 - from the iTunes Search API, the music video's 30-second preview, by artist and
-  title; from Wikidata, the music video's YouTube ID (P1651);
-- from MusicBrainz, genres by ISRC, a request a second at most;
+  title; from Wikidata and Genius, the music video's YouTube ID, checked with
+  YouTube's oEmbed;
+- from MusicBrainz, genres of the recording found by artist and title (Yandex
+  Music gives no ISRC), a request a second at most;
 - from Apple Music, the motion cover: the album on the iTunes Search API, then
   the HLS playlists linked on its music.apple.com page, of which the square one.
 

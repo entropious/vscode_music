@@ -188,7 +188,7 @@
         "yandexMusic.remote.detailedGenres": {
           "type": "boolean",
           "default": true,
-          "description": "Fullscreen remote: show finer genres from MusicBrainz, looked up by the track's ISRC."
+          "description": "Fullscreen remote: show finer genres from MusicBrainz, looked up by the track's artist and title."
         },
         "yandexMusic.sloplessBaseUrl": {
           "type": "string",
