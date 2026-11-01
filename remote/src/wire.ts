@@ -89,7 +89,6 @@ export interface SharedState {
 export interface TrackVisuals {
   genre?: { id: string; title: string; titleRu?: string; color?: string };
   tags?: string[];
-  clip?: { title: string; previewUrl: string; thumbnail?: string };
   musicVideo?: string;
   youtubeId?: string;
   video?: string;

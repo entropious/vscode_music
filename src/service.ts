@@ -176,9 +176,12 @@ let settings: ServiceSettings = { protocol: PROTOCOL, ...BUILD, apiBaseUrl: 'htt
 const SETTINGS_FILE = path.join(path.dirname(logFile), 'service-settings.json');
 /** The token's item in the login keychain, written and read by /usr/bin/security, which may then read it without asking. */
 const KEYCHAIN = ['-s', 'vscode-yandex-music', '-a', 'token'];
+/** The Genius API token's item, kept the same way. */
+const GENIUS_KEYCHAIN = ['-s', 'vscode-yandex-music-genius', '-a', 'token'];
 /** What was last saved, so a window's repeated hello doesn't write it again. */
 let savedSettings: string | undefined;
 let savedToken: string | undefined;
+let savedGeniusToken: string | undefined;
 /** A window has sent its settings; the saved ones must not override them. */
 let windowSettings = false;
 
@@ -193,8 +196,21 @@ function keychain(command: string): Promise<void> {
   });
 }
 
+/** Writes a token to its keychain item, or deletes the item when there is no token. */
+async function saveToKeychain(item: string[], token: string | undefined): Promise<void> {
+  if (token && /^[\w.-]+$/.test(token)) {
+    await keychain(`add-generic-password -U ${item.join(' ')} -w ${token}`);
+  } else if (!token) {
+    await keychain(`delete-generic-password ${item.join(' ')}`);
+  }
+}
+
+function readKeychain(item: string[]): Promise<string | undefined> {
+  return new Promise((resolve) => execFile('security', ['find-generic-password', ...item, '-w'], (err, out) => resolve(err ? undefined : out.trim() || undefined)));
+}
+
 async function saveSettings(s: ServiceSettings): Promise<void> {
-  const { token, protocol, build, builtAt, ...rest } = s;
+  const { token, geniusToken, protocol, build, builtAt, ...rest } = s;
   const json = JSON.stringify(rest);
   if (json !== savedSettings) {
     savedSettings = json;
@@ -202,11 +218,11 @@ async function saveSettings(s: ServiceSettings): Promise<void> {
   }
   if (token !== savedToken) {
     savedToken = token;
-    if (token && /^[\w.-]+$/.test(token)) {
-      await keychain(`add-generic-password -U ${KEYCHAIN.join(' ')} -w ${token}`);
-    } else if (!token) {
-      await keychain(`delete-generic-password ${KEYCHAIN.join(' ')}`);
-    }
+    await saveToKeychain(KEYCHAIN, token);
+  }
+  if (geniusToken !== savedGeniusToken) {
+    savedGeniusToken = geniusToken;
+    await saveToKeychain(GENIUS_KEYCHAIN, geniusToken);
   }
 }
 
@@ -219,14 +235,13 @@ async function loadSettings(): Promise<void> {
   } catch {
     // never saved: a window must say hello first
   }
-  const token = await new Promise<string | undefined>((resolve) =>
-    execFile('security', ['find-generic-password', ...KEYCHAIN, '-w'], (err, out) => resolve(err ? undefined : out.trim() || undefined)),
-  );
+  const [token, geniusToken] = await Promise.all([readKeychain(KEYCHAIN), readKeychain(GENIUS_KEYCHAIN)]);
   savedToken = token;
+  savedGeniusToken = geniusToken;
   if (windowSettings) {
     return;
   }
-  settings = { ...settings, ...saved, token, protocol: PROTOCOL, ...BUILD };
+  settings = { ...settings, ...saved, token, geniusToken, protocol: PROTOCOL, ...BUILD };
   core.volume = settings.volume;
   audio.setVolume(settings.volume);
   log.info(`service: took the saved settings${token ? ' and token' : ', no token'}`);
@@ -313,7 +328,7 @@ const visuals = new VisualsLookup(
     await loaded;
     return new YandexMusicClient(settings.apiBaseUrl, settings.token);
   },
-  () => ({ motionCovers: settings.motionCovers !== false, musicVideos: settings.musicVideos !== false, detailedGenres: settings.detailedGenres !== false }),
+  () => ({ motionCovers: settings.motionCovers !== false, musicVideos: settings.musicVideos !== false, detailedGenres: settings.detailedGenres !== false, geniusToken: settings.geniusToken }),
   log,
 );
 /** Tracks whose visuals have been looked up or are being looked up. */

@@ -3,12 +3,11 @@ import Hls from 'hls.js/light';
 import type { TrackVisuals } from '../wire.ts';
 
 /** One video to show for a track. */
-export type Visual = { kind: 'musicVideo' | 'clip' | 'video' | 'artistVideo' | 'motionCover'; url: string } | { kind: 'youtube'; id: string };
+export type Visual = { kind: 'musicVideo' | 'video' | 'artistVideo' | 'motionCover'; url: string } | { kind: 'youtube'; id: string };
 
 /**
- * The video to show, in order of preference: a music video (the iTunes Store's preview, the
- * one on YouTube, Yandex Music's short preview), the track's own video shot, the artist's
- * video, the album's motion cover.
+ * The video to show, in order of preference: a music video (the iTunes Store's preview, then
+ * the one on YouTube), the track's own video shot, the artist's video, the album's motion cover.
  */
 export function pickVisual(v: TrackVisuals | undefined): Visual | undefined {
   if (!v) {
@@ -19,9 +18,6 @@ export function pickVisual(v: TrackVisuals | undefined): Visual | undefined {
   }
   if (v.youtubeId) {
     return { kind: 'youtube', id: v.youtubeId };
-  }
-  if (v.clip) {
-    return { kind: 'clip', url: v.clip.previewUrl };
   }
   if (v.video) {
     return { kind: 'video', url: v.video };
@@ -77,7 +73,7 @@ export class VideoStage {
     if (visual.kind === 'youtube') {
       this.showYouTube(visual.id, position);
     } else {
-      this.showVideo(visual.url, visual.kind === 'musicVideo' || visual.kind === 'clip');
+      this.showVideo(visual.url, visual.kind === 'musicVideo');
     }
   }
 

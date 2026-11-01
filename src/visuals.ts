@@ -3,20 +3,18 @@ import type { Logger } from './core';
 
 /**
  * What the fullscreen remote shows besides the cover: videos of a track and its genres. The
- * remote picks one video by its own order (a music video from the iTunes Store or Yandex Music,
- * the track's video shot, the artist's video, Apple Music's motion cover); the rest is there for
- * it to fall back on. Every video plays without sound.
+ * remote picks one video by its own order (a music video from the iTunes Store or YouTube, the
+ * track's video shot, the artist's video, Apple Music's motion cover); the rest is there for it
+ * to fall back on. Every video plays without sound.
  */
 export interface TrackVisuals {
   /** The album's genre, with its names and color from `/genres`. */
   genre?: { id: string; title: string; titleRu?: string; color?: string };
   /** Finer genres from MusicBrainz, found by the track's ISRC, most voted first. */
   tags?: string[];
-  /** A music video on Yandex Music: its short preview. */
-  clip?: { title: string; previewUrl: string; thumbnail?: string };
   /** A music video in the iTunes Store: its 30-second preview, MP4. */
   musicVideo?: string;
-  /** A music video on YouTube, as Yandex Music links it, or else as Wikidata does. */
+  /** A music video on YouTube, as Wikidata links it, or else Genius. */
   youtubeId?: string;
   /** The track's video shot: a short looping vertical video, MP4. */
   video?: string;
@@ -31,6 +29,8 @@ export interface VisualsOptions {
   motionCovers: boolean;
   musicVideos: boolean;
   detailedGenres: boolean;
+  /** Genius's API token, which the music videos are also looked up on Genius with. */
+  geniusToken?: string;
 }
 
 const TIMEOUT_MS = 15000;
@@ -216,8 +216,38 @@ class WikidataVideos {
 }
 
 /**
+ * A song's video on YouTube as Genius links it: the song is searched by artist and title, and
+ * its page's media give the link. Genius wants an API token; without one nothing is looked up.
+ */
+class GeniusVideos {
+  private readonly cache = new Cache<string | undefined>();
+
+  youtubeId(token: string, artist: string, title: string): Promise<string | undefined> {
+    return this.cache.get(`${artist}\n${title}`, async () => {
+      const get = async (p: string): Promise<any> => JSON.parse(await getText(`https://api.genius.com${p}`, { Authorization: `Bearer ${token}`, Accept: 'application/json' }))?.response;
+      const hits: any[] = (await get(`/search?${new URLSearchParams({ q: `${artist} ${title}` })}`))?.hits ?? [];
+      const t = plain(title);
+      const by = plain(artist);
+      const song = hits
+        .map((h) => h.result)
+        .find((r) => {
+          const who = plain(String(r?.primary_artist?.name ?? ''));
+          // Genius adds the original title in brackets to translated ones: "Ночь (Night)".
+          return who && (who.includes(by) || by.includes(who)) && plain(String(r?.title ?? '')).startsWith(t);
+        });
+      if (!song) {
+        return undefined;
+      }
+      const media: any[] = (await get(`/songs/${song.id}`))?.song?.media ?? [];
+      const url = media.find((m) => m.provider === 'youtube')?.url;
+      return url ? new URL(String(url)).searchParams.get('v') ?? undefined : undefined;
+    });
+  }
+}
+
+/**
  * Looks up a track's visuals in Yandex Music and, as the user allows, MusicBrainz, Apple Music,
- * the iTunes Store and Wikidata. Each source reports as soon as it answers; a source that fails
+ * the iTunes Store, Wikidata and Genius. Each source reports as soon as it answers; a source that fails
  * is left out.
  */
 export class VisualsLookup {
@@ -230,6 +260,7 @@ export class VisualsLookup {
   private readonly apple = new AppleMotion();
   private readonly appleVideos = new AppleMusicVideos();
   private readonly wikidata = new WikidataVideos();
+  private readonly genius = new GeniusVideos();
 
   constructor(client: () => Promise<YandexMusicClient>, options: () => VisualsOptions, log: Logger) {
     this.client = client;
@@ -255,14 +286,6 @@ export class VisualsLookup {
     const client = await this.client();
     const tasks: [string, () => Promise<void>][] = [
       ['genre', async () => add({ genre: album?.genre ? (await this.genreMap(client)).get(album.genre) ?? { id: album.genre, title: album.genre } : undefined })],
-      [
-        'clips',
-        async () => {
-          const clip = (await client.clips(track.clipIds ?? [])).find((c) => c.previewUrl);
-          add({ clip: clip?.previewUrl ? { title: clip.title, previewUrl: clip.previewUrl, thumbnail: clip.thumbnail } : undefined });
-        },
-      ],
-      ['supplement', async () => add({ youtubeId: (await client.supplementVideos(track.id)).find((v) => v.provider.toLowerCase() === 'youtube')?.providerVideoId })],
       ['artist video', async () => add({ artistVideo: artist ? await this.artistVideos.get(String(artist.id), () => client.artistVideo(artist.id)) : undefined })],
     ];
     if (opts.detailedGenres && track.isrc) {
@@ -274,23 +297,22 @@ export class VisualsLookup {
     }
     if (opts.musicVideos && artist) {
       tasks.push(['iTunes music video', async () => add({ musicVideo: await this.appleVideos.video(artist.name, track.title) })]);
-      tasks.push([
-        'Wikidata',
-        async () => {
-          const id = await this.wikidata.youtubeId(artist.name, track.title);
-          // Yandex Music's own link to YouTube comes first.
-          if (!found.youtubeId) {
-            add({ youtubeId: id });
-          }
-        },
-      ]);
+      tasks.push(['Wikidata', async () => add({ youtubeId: await this.wikidata.youtubeId(artist.name, track.title) })]);
+      const geniusToken = opts.geniusToken;
+      if (geniusToken) {
+        tasks.push([
+          'Genius',
+          async () => {
+            const id = await this.genius.youtubeId(geniusToken, artist.name, track.title);
+            // Wikidata's link is the official video; Genius sometimes links a lyric video.
+            if (!found.youtubeId) {
+              add({ youtubeId: id });
+            }
+          },
+        ]);
+      }
     }
-    await Promise.all(
-      tasks.map(([name, task]) =>
-        // The supplement is missing for most tracks, and clips for those without any.
-        task().catch((e) => name !== 'supplement' && this.log.debug(`visuals: ${name} of ${track.id}: ${e instanceof Error ? e.message : String(e)}`)),
-      ),
-    );
+    await Promise.all(tasks.map(([name, task]) => task().catch((e) => this.log.debug(`visuals: ${name} of ${track.id}: ${e instanceof Error ? e.message : String(e)}`))));
   }
 
   private genreMap(client: YandexMusicClient): Promise<Map<string, Genre>> {

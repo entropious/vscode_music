@@ -129,8 +129,8 @@
         "icon": "$(screen-full)"
       },
       {
-        "command": "yandexMusic.saveVideoInfo",
-        "title": "Save Video Info of the Current Track (for debugging)",
+        "command": "yandexMusic.setGeniusToken",
+        "title": "Set Genius Token for Music Videos",
         "category": "Yandex Music"
       }
     ],
@@ -183,7 +183,7 @@
         "yandexMusic.remote.musicVideos": {
           "type": "boolean",
           "default": true,
-          "description": "Fullscreen remote: show the track's music video, silent, behind the player: a 30-second preview from the iTunes Search API, or the YouTube video that Wikidata links."
+          "description": "Fullscreen remote: show the track's music video, silent, behind the player: a 30-second preview from the iTunes Search API, or the YouTube video that Wikidata or, with a token set by Set Genius Token for Music Videos, Genius links."
         },
         "yandexMusic.remote.detailedGenres": {
           "type": "boolean",

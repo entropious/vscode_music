@@ -26,8 +26,6 @@ export interface Track {
   available?: boolean;
   /** A short looping vertical video (a "video shot"), MP4 on Yandex's storage. */
   backgroundVideoUri?: string;
-  /** The track's music videos, for `/clips`. */
-  clipIds?: number[];
   isrc?: string;
 }
 
@@ -38,25 +36,6 @@ export interface Genre {
   /** The Russian title. */
   titleRu?: string;
   color?: string;
-}
-
-/** A music video of a track. */
-export interface Clip {
-  id: number;
-  title: string;
-  /** A short preview, MP4. */
-  previewUrl?: string;
-  thumbnail?: string;
-  /** Seconds. */
-  duration?: number;
-}
-
-/** A video of a track elsewhere, from `/tracks/{id}/supplement`. */
-export interface SupplementVideo {
-  provider: string;
-  /** The video's ID on the provider, such as YouTube's. */
-  providerVideoId?: string;
-  title?: string;
 }
 
 export interface Playlist {
@@ -329,34 +308,10 @@ export class YandexMusicClient {
     }));
   }
 
-  async clips(ids: number[]): Promise<Clip[]> {
-    if (!ids.length) {
-      return [];
-    }
-    const r = await this.request<any[]>(`/clips?${new URLSearchParams({ clipIds: ids.join(',') })}`);
-    return (Array.isArray(r) ? r : []).map((c) => ({
-      id: Number(c.clipId),
-      title: String(c.title ?? ''),
-      previewUrl: c.previewUrl,
-      thumbnail: c.thumbnail ? coverUrl(c.thumbnail, 400) : undefined,
-      duration: c.duration,
-    }));
-  }
-
   /** The artist's background video, shown on their page in Yandex Music's apps. */
   async artistVideo(artistId: Artist['id']): Promise<string | undefined> {
     const r = await this.request<any>(`/artists/${artistId}/brief-info`);
     return r?.backgroundVideoUrl ?? r?.artist?.backgroundVideoUrl ?? undefined;
-  }
-
-  async supplementVideos(trackId: string): Promise<SupplementVideo[]> {
-    const r = await this.request<any>(`/tracks/${trackId.split(':')[0]}/supplement`);
-    return (r?.videos ?? []).map((v: any) => ({ provider: String(v.provider ?? ''), providerVideoId: v.providerVideoId ? String(v.providerVideoId) : undefined, title: v.title }));
-  }
-
-  /** A raw API response, for finding out what the API sends (see the saveVideoInfo command). */
-  raw(path: string): Promise<unknown> {
-    return this.request<unknown>(path);
   }
 
   /** Returns a direct stream link for the track, preferring MP3 over other codecs. */
@@ -403,7 +358,6 @@ export function normalizeTrack(t: any): Track {
     coverUri: t.coverUri ?? t.ogImage,
     available: t.available !== false,
     backgroundVideoUri: t.backgroundVideoUri || undefined,
-    clipIds: Array.isArray(t.clipIds) && t.clipIds.length ? t.clipIds.map(Number) : undefined,
     isrc: t.isrc || undefined,
   };
 }
