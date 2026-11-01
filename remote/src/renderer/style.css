@@ -134,6 +134,8 @@ h1.cut { overflow-wrap: anywhere; }
 .tags { font-size: 17px; color: rgba(255, 255, 255, .7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
 .tags:empty { display: none; }
 .stream { font-family: var(--mono); font-size: 17px; color: rgba(255, 255, 255, .7); }
+/* The finer genres and the stream read as one line of details. */
+.tags:not(:empty) + .stream:not(:empty)::before { content: '·'; margin-right: 12px; }
 
 /* Progress: the played bars are yellow and glow. */
 .progress { display: flex; flex-direction: column; gap: 10px; margin-top: 8px; }
