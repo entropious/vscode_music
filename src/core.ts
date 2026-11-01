@@ -230,6 +230,8 @@ export class PlayerCore {
   audioUnlocked = false;
   volume?: number;
   visuals: Record<string, TrackVisuals> = {};
+  /** The tracks in `visuals`, oldest first. */
+  private visualsOrder: string[] = [];
   slop: Record<string, boolean> = {};
   /** Tracks being looked up on slopless.art right now. */
   private readonly slopPending = new Set<string>();
@@ -303,6 +305,7 @@ export class PlayerCore {
     this.audioUnlocked = s.audioUnlocked;
     this.volume = s.volume;
     this.visuals = s.visuals ?? {};
+    this.visualsOrder = Object.keys(this.visuals);
     this.changed();
   }
 
@@ -314,8 +317,10 @@ export class PlayerCore {
   /** Sets a track's visuals; only the last few tracks' are kept. */
   setVisuals(trackId: string, visuals: TrackVisuals): void {
     const id = baseId(trackId);
-    const kept = Object.entries(this.visuals).filter(([k]) => k !== id).slice(-VISUALS_KEPT);
-    this.visuals = Object.fromEntries([...kept, [id, visuals]]);
+    // Track IDs are numbers, which an object orders by value rather than by insertion, so the
+    // order the tracks came in is kept apart.
+    this.visualsOrder = [...this.visualsOrder.filter((k) => k !== id), id].slice(-(VISUALS_KEPT + 1));
+    this.visuals = Object.fromEntries(this.visualsOrder.map((k) => [k, k === id ? visuals : this.visuals[k]]).filter(([, v]) => v));
     this.changed();
   }
 
