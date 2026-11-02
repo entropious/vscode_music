@@ -83,12 +83,22 @@ button:focus-visible, .bars:focus-visible { outline: 3px solid var(--accent); ou
 .pills button:hover { background: rgba(255, 255, 255, .1); }
 .pills button[aria-pressed="true"] { background: var(--accent); color: #141416; }
 .pills .heart { fill: var(--like); }
-/* Moved 12px towards Liked, whose own 24px of padding is empty while it isn't chosen, so that
-   the icon sits halfway between the Vibe pill and the Liked label; the row keeps its width. */
-.pills .tune { position: relative; width: 52px; padding: 0; justify-content: center; margin: 0 -12px 0 12px; }
-/* A dot at the round button's top right while some My Vibe setting is chosen rather than left to Yandex Music. */
-.pills .tune.set::after { content: ''; position: absolute; top: 7px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+/* Vibe and its settings make one pill: Vibe on the left, the settings button on the right past a
+   thin line. While My Vibe plays the whole pill is yellow. */
+.vibe-pill { display: flex; border-radius: 999px; transition: background-color .3s; }
+.vibe-pill:has(#pillVibe[aria-pressed="true"]) { background: var(--accent); }
+.vibe-pill button { border-radius: 0; }
+.vibe-pill #pillVibe { padding: 0 18px 0 24px; border-radius: 999px 0 0 999px; }
+.vibe-pill #pillVibe[aria-pressed="true"] { background: transparent; }
+.pills .tune { position: relative; width: 56px; padding: 0 4px 0 0; justify-content: center; border-radius: 0 999px 999px 0; box-shadow: inset 1px 0 0 rgba(255, 255, 255, .18); }
+.vibe-pill:has(#pillVibe[aria-pressed="true"]) .tune { color: #141416; box-shadow: inset 1px 0 0 rgba(20, 20, 22, .22); }
+.vibe-pill:has(#pillVibe[aria-pressed="true"]) button:hover { background: rgba(20, 20, 22, .08); }
+/* A dot at the button's top right while some My Vibe setting is chosen rather than left to Yandex Music. */
+.pills .tune.set::after { content: ''; position: absolute; top: 9px; right: 11px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
+.vibe-pill:has(#pillVibe[aria-pressed="true"]) .tune.set::after { background: #141416; }
+/* Open settings: the settings half is shaded. */
 .pills .tune[aria-pressed="true"] { background: rgba(255, 204, 0, .18); color: var(--accent); }
+.vibe-pill:has(#pillVibe[aria-pressed="true"]) .tune[aria-pressed="true"] { background: rgba(20, 20, 22, .14); color: #141416; }
 .pills button[aria-pressed="true"] .heart { fill: #141416; }
 .top-right { flex: 1 1 200px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .queue-btn { height: 64px; padding: 0 24px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 20px; background: rgba(255, 255, 255, .08); display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 600; transition: background-color .3s, border-color .3s; }
