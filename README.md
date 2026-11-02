@@ -24,7 +24,11 @@ as `.vsix` files: **Extensions → … → Install from VSIX…**
   `rock`, `jazz` or `рок` puts up to three matching genre stations above the
   tracks, and clicking one starts endless radio of that genre, as My Vibe does.
   **Track radio** under the current track keeps it playing and fills the queue
-  after it with endless music like it.
+  after it with endless music like it. **Liked** shows your liked tracks
+  without touching the queue; Liked plays from the track you pick there. The
+  button next to **Vibe** sets up My Vibe as on the site: character, mood and
+  language (Russian, foreign or no words). While My Vibe plays, a change keeps
+  the current track and replaces the tracks after it.
 - **Status bar** — `‹ ▶ ›` buttons and the current track. Hover over the track
   or click it to open a mini player with previous, play/pause, next and like.
 - **Keyboard shortcuts**
@@ -98,6 +102,9 @@ and copy `Yandex Music Remote.app` to `/Applications`.
 | `L` / `M` | Like / mute |
 | `Q` / `/` | Queue / search |
 | `F` | Leave or enter full screen |
+
+The remote has the same Liked list and My Vibe settings: **Liked** opens the list
+in the side panel, and the button next to **Vibe** opens the settings.
 
 Media keys keep working through the player service's Now Playing.
 

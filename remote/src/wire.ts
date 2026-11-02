@@ -84,6 +84,18 @@ export interface SharedState {
   volume?: number;
   /** Track ID (without the album) → its videos and genres, `TrackVisuals` in `src/visuals.ts`. */
   visuals?: Record<string, TrackVisuals>;
+  /** The Liked list, loaded to be shown; it plays only when a track in it is picked. */
+  likedTracks?: Track[];
+  /** My Vibe's settings and their options, once loaded. */
+  waveOptions?: WaveSetting[];
+  /** Setting ID → the seed of the chosen option; a setting left to Yandex Music is absent. */
+  waveSettings?: Record<string, string>;
+}
+
+export interface WaveSetting {
+  id: string;
+  name: string;
+  options: { name: string; seed: string; any?: boolean }[];
 }
 
 export interface TrackVisuals {
@@ -112,6 +124,10 @@ export interface RemoteMethods {
   loadPlaylists: [];
   refreshAccount: [];
   startTrackRadio: [];
+  loadLikedTracks: [];
+  loadWaveSettings: [];
+  /** `null` leaves the setting to Yandex Music. */
+  setWaveSetting: [id: string, seed: string | null];
 }
 export type RemoteMethod = keyof RemoteMethods;
 

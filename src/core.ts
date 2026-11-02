@@ -1,4 +1,4 @@
-import type { Account, Playlist, Station, Track, WaveBatch, WaveEvent, YandexMusicClient } from './api';
+import type { Account, Playlist, Station, Track, WaveBatch, WaveEvent, WaveSetting, YandexMusicClient } from './api';
 import { WAVE_SEED, artistLine, fullTitle } from './api';
 import type { SlopChecker } from './slop';
 import type { TrackVisuals } from './visuals';
@@ -81,6 +81,9 @@ export const REMOTE_METHODS = [
   'loadPlaylists',
   'refreshAccount',
   'startTrackRadio',
+  'loadLikedTracks',
+  'loadWaveSettings',
+  'setWaveSetting',
 ] as const;
 export type RemoteMethod = (typeof REMOTE_METHODS)[number];
 
@@ -134,6 +137,12 @@ export interface SharedState {
   volume?: number;
   /** Track ID (without the album) → its videos and genres; the macOS service finds them while the fullscreen remote is connected. */
   visuals?: Record<string, TrackVisuals>;
+  /** The Liked list, loaded to be shown; it plays only when a track in it is picked. */
+  likedTracks?: Track[];
+  /** My Vibe's settings and their options, once loaded. */
+  waveOptions?: WaveSetting[];
+  /** Setting ID → the seed of the chosen option; a setting left to Yandex Music is absent. */
+  waveSettings?: Record<string, string>;
 }
 
 /** Where the audio actually plays: a webview's <audio> element or the macOS service's AVPlayer. */
@@ -159,7 +168,44 @@ export interface CoreHost {
   notice(text: string): void;
   /** Marks AI-generated tracks; undefined while the yandexMusic.aiLabels setting is off. */
   slop(): SlopChecker | undefined;
+  /** Keeps the chosen My Vibe settings for the next start. */
+  saveWaveSettings(settings: Record<string, string>): void;
 }
+
+/** My Vibe's settings as the site offers them, for when the API doesn't list them. */
+const WAVE_SETTINGS_FALLBACK: WaveSetting[] = [
+  {
+    id: 'diversity',
+    name: 'Характер',
+    options: [
+      { name: 'Любое', seed: 'settingDiversity:default', any: true },
+      { name: 'Любимое', seed: 'settingDiversity:favorite' },
+      { name: 'Незнакомое', seed: 'settingDiversity:discover' },
+      { name: 'Популярное', seed: 'settingDiversity:popular' },
+    ],
+  },
+  {
+    id: 'moodEnergy',
+    name: 'Настроение',
+    options: [
+      { name: 'Любое', seed: 'settingMoodEnergy:all', any: true },
+      { name: 'Бодрое', seed: 'settingMoodEnergy:active' },
+      { name: 'Весёлое', seed: 'settingMoodEnergy:fun' },
+      { name: 'Спокойное', seed: 'settingMoodEnergy:calm' },
+      { name: 'Грустное', seed: 'settingMoodEnergy:sad' },
+    ],
+  },
+  {
+    id: 'language',
+    name: 'Язык',
+    options: [
+      { name: 'Любой', seed: 'settingLanguage:any', any: true },
+      { name: 'Русский', seed: 'settingLanguage:russian' },
+      { name: 'Иностранный', seed: 'settingLanguage:not-russian' },
+      { name: 'Без слов', seed: 'settingLanguage:without-words' },
+    ],
+  },
+];
 
 export function sourceLabel(source: Source | undefined): string {
   switch (source?.kind) {
@@ -232,6 +278,9 @@ export class PlayerCore {
   visuals: Record<string, TrackVisuals> = {};
   /** The tracks in `visuals`, oldest first. */
   private visualsOrder: string[] = [];
+  likedTracks: Track[] = [];
+  waveOptions: WaveSetting[] = [];
+  waveSettings: Record<string, string> = {};
   slop: Record<string, boolean> = {};
   /** Tracks being looked up on slopless.art right now. */
   private readonly slopPending = new Set<string>();
@@ -284,6 +333,9 @@ export class PlayerCore {
       audioUnlocked: this.audioUnlocked,
       volume: this.volume,
       visuals: this.visuals,
+      likedTracks: this.likedTracks,
+      waveOptions: this.waveOptions,
+      waveSettings: this.waveSettings,
     };
   }
 
@@ -306,6 +358,9 @@ export class PlayerCore {
     this.volume = s.volume;
     this.visuals = s.visuals ?? {};
     this.visualsOrder = Object.keys(this.visuals);
+    this.likedTracks = s.likedTracks ?? [];
+    this.waveOptions = s.waveOptions ?? [];
+    this.waveSettings = s.waveSettings ?? {};
     this.changed();
   }
 
@@ -417,6 +472,57 @@ export class PlayerCore {
    * Starts radio from the current track: the track keeps playing, and what follows it becomes
    * an endless selection of similar music, the way Yandex Music's "My Vibe by track" works.
    */
+  /** Loads the Liked list to show it, without playing it or touching the queue. */
+  async loadLikedTracks(): Promise<Track[]> {
+    const acc = await this.requireAccount();
+    const client = await this.host.client();
+    this.likedTracks = await client.likedTracks(acc.uid);
+    this.changed();
+    return this.likedTracks;
+  }
+
+  async loadWaveSettings(): Promise<WaveSetting[]> {
+    const client = await this.host.client();
+    try {
+      const options = await client.waveSettings();
+      this.waveOptions = options.length ? options : WAVE_SETTINGS_FALLBACK;
+    } catch (e) {
+      this.host.log.warn(`My Vibe settings: ${errorText(e)}; using the usual ones`);
+      this.waveOptions = WAVE_SETTINGS_FALLBACK;
+    }
+    this.changed();
+    return this.waveOptions;
+  }
+
+  /**
+   * Chooses an option of a My Vibe setting, or `undefined` to leave it to Yandex Music. While My
+   * Vibe plays, the current track goes on and what follows it is a new session's selection with
+   * the new settings, as on the site.
+   */
+  async setWaveSetting(id: string, seed: string | undefined): Promise<void> {
+    const settings = { ...this.waveSettings };
+    if (seed && !this.waveOptions.find((s) => s.id === id)?.options.find((o) => o.seed === seed)?.any) {
+      settings[id] = seed;
+    } else {
+      delete settings[id];
+    }
+    this.waveSettings = settings;
+    this.host.saveWaveSettings(settings);
+    this.changed();
+    const track = this.current();
+    if (this.source?.kind !== 'wave' || !track) {
+      return;
+    }
+    const tracks = (await this.fetchSource({ kind: 'wave' })).filter((t) => baseId(t.id) !== baseId(track.id));
+    if (this.current() !== track || this.waveSettings !== settings) {
+      return; // the track or the settings changed meanwhile
+    }
+    this.queue = [track, ...tracks];
+    this.index = 0;
+    this.changed();
+    this.checkSlopAround(0);
+  }
+
   async startTrackRadio(): Promise<void> {
     const track = this.current();
     if (!track) {
@@ -518,8 +624,10 @@ export class PlayerCore {
     const log = this.host.log;
     const seed = radioSeed(source) ?? WAVE_SEED;
     const label = sourceLabel(source);
+    // My Vibe's settings go along as seeds of their own.
+    const seeds = source.kind === 'wave' ? [seed, ...Object.values(this.waveSettings)] : [seed];
     try {
-      const batch = await client.waveStart(seed);
+      const batch = await client.waveStart(seeds);
       this.wave = { sessionId: batch.sessionId, batches: new Map() };
       this.rememberBatch(batch);
       log.info(`${label}: session ${batch.sessionId}, batch ${batch.batchId}: ${batch.tracks.map(fullTitle).join(', ')}`);
@@ -717,6 +825,9 @@ export class PlayerCore {
     } else {
       this.liked.delete(id);
     }
+    // A Liked list on show follows: a new like goes on top, as in Yandex Music.
+    const shown = this.likedTracks.filter((t) => baseId(t.id) !== id);
+    this.likedTracks = like && this.likedTracks.length ? [track, ...shown] : shown;
     this.changed();
     this.host.notice(like ? '♥ Added to Liked' : 'Removed from Liked');
     return like;

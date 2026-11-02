@@ -136,6 +136,27 @@ const methods: Record<string, (...a: any[]) => unknown> = {
     }
   },
   refreshAccount: () => state.account,
+  loadLikedTracks: async () => {
+    await Bun.sleep(300);
+    state.likedTracks = tracks.filter((t) => state.liked.includes(t.id.split(':')[0] ?? ''));
+  },
+  loadWaveSettings: () => {
+    const g = (id: string, name: string, options: [string, string][]) => ({ id, name, options: options.map(([n, v], i) => ({ name: n, seed: `setting${id[0]?.toUpperCase()}${id.slice(1)}:${v}`, ...(i === 0 ? { any: true } : {}) })) });
+    state.waveOptions = [
+      g('diversity', 'Характер', [['Любое', 'default'], ['Любимое', 'favorite'], ['Незнакомое', 'discover'], ['Популярное', 'popular']]),
+      g('moodEnergy', 'Настроение', [['Любое', 'all'], ['Бодрое', 'active'], ['Весёлое', 'fun'], ['Спокойное', 'calm'], ['Грустное', 'sad']]),
+      g('language', 'Язык', [['Любой', 'any'], ['Русский', 'russian'], ['Иностранный', 'not-russian'], ['Без слов', 'without-words']]),
+    ];
+  },
+  setWaveSetting: (id: string, seed: string | null) => {
+    const settings = { ...state.waveSettings };
+    if (seed) {
+      settings[id] = seed;
+    } else {
+      delete settings[id];
+    }
+    state.waveSettings = settings;
+  },
 };
 
 await Bun.$`rm -f ${SOCKET}`.quiet();
