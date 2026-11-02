@@ -396,11 +396,17 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
         return;
       }
       const volumeChanged = m.settings.volume !== settings.volume;
+      const tokenChanged = m.settings.token !== settings.token;
       settings = m.settings;
       windowSettings = true;
       void saveSettings(settings);
       if (volumeChanged) {
         void core.setVolume(settings.volume);
+      }
+      // The account is checked again with a new token: windows that reload together may say hello
+      // in any order, one still without its token, and the account found with that one would stay.
+      if (tokenChanged && core.accountChecked) {
+        void core.refreshAccount().catch((e) => log.warn(`service: account: ${errorText(e)}`));
       }
       accept(socket, 'window');
       return;
