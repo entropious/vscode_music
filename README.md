@@ -87,12 +87,18 @@ same way a VS Code window does, and starts that service itself when it isn't
 running, so it works without VS Code open. The music keeps playing while the app
 is open, even after VS Code is closed.
 
-Once the app is installed, the player panel's title bar gets a `⛶` button that
-opens it, and so does **Yandex Music: Open Fullscreen Remote**. The extension
-has to be installed and signed in once. The app isn't signed, so build it yourself (see
-[`remote/`](https://github.com/entropious/vscode_music/tree/main/remote) and
-[DEVELOPMENT.md](https://github.com/entropious/vscode_music/blob/main/DEVELOPMENT.md#fullscreen-remote-macos))
-and copy `Yandex Music Remote.app` to `/Applications`.
+The `⛶` button in the player panel's title bar opens it, and so does **Yandex
+Music: Open Fullscreen Remote**. The extension has to be installed and signed in
+once. When the app isn't there yet, the button offers to install it: a terminal
+runs `remote/scripts/install.sh` of this version, which builds the app on your
+Mac from its source and puts it into `~/Applications`. That takes about 120 MB of
+downloads, mostly Electron, and a few minutes, and installs [Bun](https://bun.sh)
+if you have none. To update the app after the extension, run **Yandex Music:
+Install Fullscreen Remote**, or the script yourself:
+
+```
+curl -fsSL https://raw.githubusercontent.com/entropious/vscode_music/main/remote/scripts/install.sh | bash
+```
 
 | Key | Action |
 |---|---|

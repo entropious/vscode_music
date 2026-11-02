@@ -129,6 +129,11 @@
         "icon": "$(screen-full)"
       },
       {
+        "command": "yandexMusic.installRemote",
+        "title": "Install Fullscreen Remote",
+        "category": "Yandex Music"
+      },
+      {
         "command": "yandexMusic.setGeniusToken",
         "title": "Set Genius Token for Music Videos",
         "category": "Yandex Music"
@@ -211,14 +216,18 @@
       "view/title": [
         {
           "command": "yandexMusic.openRemote",
-          "when": "view == yandexMusic.player && yandexMusic.remoteInstalled",
+          "when": "view == yandexMusic.player && isMac",
           "group": "navigation"
         }
       ],
       "commandPalette": [
         {
           "command": "yandexMusic.openRemote",
-          "when": "yandexMusic.remoteInstalled"
+          "when": "isMac"
+        },
+        {
+          "command": "yandexMusic.installRemote",
+          "when": "isMac"
         }
       ]
     }

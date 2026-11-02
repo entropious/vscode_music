@@ -13,6 +13,8 @@ import { PlayerSync } from './sync';
 const REMOTE_BUNDLE_ID = 'net.entro.yandex-music-remote';
 const REMOTE_APP = 'Yandex Music Remote.app';
 const REMOTE_DOCS = 'https://github.com/entropious/vscode_music#fullscreen-remote-macos';
+/** The repository whose remote/scripts/install.sh builds and installs the remote. */
+const REMOTE_REPO = 'entropious/vscode_music';
 /** The Genius API token in VS Code's secret storage; the player service keeps its own copy in the login keychain. */
 const GENIUS_SECRET = 'geniusToken';
 
@@ -81,11 +83,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     remoteApp ??= await new Promise<string | undefined>((resolve) =>
       execFile('mdfind', [`kMDItemCFBundleIdentifier == '${REMOTE_BUNDLE_ID}'`], (err, out) => resolve(err ? undefined : out.split('\n').find((l) => l.endsWith('.app')))),
     );
-    // The player panel's button shows only while the app is installed.
-    void vscode.commands.executeCommand('setContext', 'yandexMusic.remoteInstalled', !!remoteApp);
   };
-  void findRemote();
-  context.subscriptions.push(vscode.window.onDidChangeWindowState((s) => s.focused && void findRemote()));
 
   /**
    * Keeps a Genius API token, which the player service finds music videos on Genius with for
@@ -120,11 +118,32 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('ELECTRON_')));
     const opened = app && (await new Promise<boolean>((resolve) => execFile('open', [app], { env }, (err) => resolve(!err))));
     if (!opened) {
-      const how = 'How to Install';
-      if ((await vscode.window.showWarningMessage('Yandex Music Remote is not installed. It is a fullscreen macOS app for the big screen that controls this player.', how)) === how) {
+      const install = 'Install';
+      const more = 'Learn More';
+      const choice = await vscode.window.showInformationMessage(
+        'Yandex Music Remote, the fullscreen app for the big screen that controls this player, is not installed. Install it? It is built on this Mac from the source of this version: about 120 MB to download and a few minutes, with Bun installed if there is none.',
+        install,
+        more,
+      );
+      if (choice === install) {
+        installRemote();
+      } else if (choice === more) {
         void vscode.env.openExternal(vscode.Uri.parse(REMOTE_DOCS));
       }
     }
+  };
+
+  /** Builds and installs the remote in a terminal, with the install script of this version's tag. */
+  const installRemote = () => {
+    const ref = `v${String(context.extension.packageJSON.version)}`;
+    const script = `https://raw.githubusercontent.com/${REMOTE_REPO}/${ref}/remote/scripts/install.sh`;
+    const terminal = vscode.window.createTerminal({
+      name: 'Yandex Music Remote',
+      shellPath: '/bin/bash',
+      shellArgs: ['-c', `curl -fsSL '${script}' | bash -s -- '${ref}'; echo; read -n 1 -s -r -p 'Press any key to close.'`],
+      env: { ELECTRON_RUN_AS_NODE: null },
+    });
+    terminal.show();
   };
 
   const guard =
@@ -199,6 +218,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     // Clicking a status bar item leaves it focused, and showHover shows the focused
     // item's tooltip, which is the mini player card.
     vscode.commands.registerCommand('yandexMusic.openRemote', guard(openRemote)),
+    vscode.commands.registerCommand('yandexMusic.installRemote', installRemote),
     vscode.commands.registerCommand('yandexMusic.setGeniusToken', guard(setGeniusToken)),
     vscode.commands.registerCommand('yandexMusic.showCard', () => vscode.commands.executeCommand('workbench.action.showHover')),
     vscode.commands.registerCommand('yandexMusic.playPause', guard(() => player.playPause())),

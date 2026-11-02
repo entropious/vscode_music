@@ -121,6 +121,12 @@ bun run package    # dist/Yandex Music Remote-darwin-{arm64,x64}/Yandex Music Re
 
 The app isn't signed: after copying it to `/Applications`, open it with right
 click → Open once, or run `xattr -dr com.apple.quarantine "/Applications/Yandex Music Remote.app"`.
+Users get it from `remote/scripts/install.sh`, which the extension runs in a
+terminal (Open Fullscreen Remote when the app isn't there, or Install Fullscreen
+Remote) at the tag of its own version: it installs Bun if needed, downloads
+`remote/` and `media/` at that tag, builds the app and puts it into
+`~/Applications`. `YM_REMOTE_SOURCE=<checkout> bash remote/scripts/install.sh`
+builds a local checkout the same way.
 The extension shows its **Open Fullscreen Remote** button once it finds the app
 in `/Applications`, `~/Applications` or, by its bundle ID
 `net.entro.yandex-music-remote`, through Spotlight.
