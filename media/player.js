@@ -1,5 +1,6 @@
 // @ts-check
 import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, preloadCover, showCover } from './nowArt.js';
+import { patch } from './patch.js';
 
 (function () {
   // @ts-ignore
@@ -125,7 +126,7 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
         <div class="times"><span id="pos">${fmt(position())}</span><span id="dur">${fmt(duration())}</span></div>
         <div class="controls">
           <button data-cmd="yandexMusic.previous" title="Previous" aria-label="Previous">${I.prev}</button>
-          <button class="play" id="play"></button>
+          <button class="play" id="play" aria-label="${isPlaying() ? 'Pause' : 'Play'}" title="${isPlaying() ? 'Pause' : 'Play'}">${isPlaying() ? I.pause : I.play}</button>
           <button data-cmd="yandexMusic.next" title="Next" aria-label="Next">${I.next}</button>
         </div>
         <div class="vol">${cur ? `<button class="dislike ${s.disliked ? 'on' : ''}" data-cmd="yandexMusic.dislike" title="${s.disliked ? 'Remove dislike' : 'Dislike: never recommend this track'}" aria-label="${s.disliked ? 'Remove dislike' : 'Dislike'}">${I.ban}</button>` : ''}<input id="vol" type="range" min="0" max="100" value="${vol}" aria-label="Volume"><span class="v" id="volv">${vol}</span>${cur ? `<button class="like ${s.liked ? 'on' : ''}" data-cmd="yandexMusic.like" title="${s.liked ? 'Remove from Liked' : 'Like'}" aria-label="${s.liked ? 'Remove from Liked' : 'Like'}">${s.liked ? I.heartOn : I.heart}</button>` : ''}</div>
@@ -137,9 +138,11 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
     const groups = state.waveOptions || [];
     if (!groups.length) return '<div class="card wave-settings"><div class="hint">Loading My Vibe settings…</div></div>';
     const chosen = state.waveSettings || {};
+    // No option chosen is the "any" one, left to Yandex Music; clicking the chosen option again goes back to it.
     return `<div class="card wave-settings">${groups.map((g) => `<div class="wave-group"><div class="wave-name">${esc(g.name)}</div><div class="chips">${g.options
+      .filter((o) => !o.any)
       .map((o) => {
-        const on = chosen[g.id] ? chosen[g.id] === o.seed : !!o.any;
+        const on = chosen[g.id] === o.seed;
         return `<button class="chip ${on ? 'on' : ''}" data-wave="${esc(g.id)}" data-seed="${esc(o.seed)}" aria-pressed="${on}">${esc(o.name)}</button>`;
       })
       .join('')}</div></div>`).join('')}</div>`;
@@ -148,7 +151,7 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
   function render() {
     const s = state;
     if (s.signedOut) {
-      app.innerHTML = signInView();
+      patch(app, signInView(), { keepStyles: true });
       return;
     }
     const acc = s.account
@@ -177,10 +180,9 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
         <ul class="list" id="results">${s.searchResults.map((t, i) => trackRow(t, i, !!cur && t.id === cur.id)).join('')}</ul>`;
     }
 
-    // The cover tile outlives the rebuilt card, so that it keeps its image (showCover swaps it)
-    // and its breathing goes on.
-    const oldCover = document.getElementById('cover');
-    app.innerHTML = `
+    patch(
+      app,
+      `
       ${needsGesture ? `<button class="gesture" id="gesture">${I.play} Enable sound</button>` : ''}
       ${acc}
       ${nowCard()}
@@ -188,7 +190,6 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
       <div class="quick">
         <button data-cmd="yandexMusic.playMyWave" title="Play My Vibe"><span class="wave-ic">${I.wave(18)}</span><span>Vibe</span></button>
         <button class="tune ${waveOpen ? 'on' : ''}" id="waveTune" title="My Vibe settings" aria-label="My Vibe settings" aria-expanded="${waveOpen}">${I.tune}</button>
-        <button data-tab="liked" title="Show Liked"><span class="heart-ic">${I.heartOn}</span><span>Liked</span></button>
       </div>
       ${waveOpen ? waveSettingsView() : ''}
       <div class="tabs">
@@ -197,10 +198,10 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
         <button data-tab="playlists" class="${tab === 'playlists' ? 'active' : ''}">Playlists</button>
         <button data-tab="search" class="${tab === 'search' ? 'active' : ''}">Search</button>
       </div>
-      ${body}`;
-    const newCover = document.getElementById('cover');
-    if (oldCover && newCover) newCover.replaceWith(oldCover);
-    // The panel's CSP forbids inline styles in markup, so sizes are set through the DOM.
+      ${body}`,
+      { keepStyles: true },
+    );
+    // The panel's CSP forbids inline styles in markup, so they are set through the DOM, here and in showArt().
     const heights = barHeights(cur ? String(cur.id) : '', BARS);
     document.querySelectorAll('#bars i').forEach((b, i) => {
       /** @type {HTMLElement} */ (b).style.height = `${heights[i] * 100}%`;
@@ -356,7 +357,8 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
       if (waveOpen && !(state.waveOptions || []).length) vscode.postMessage({ type: 'loadWaveSettings' });
       render();
     } else if (el.dataset.wave) {
-      if (el.getAttribute('aria-pressed') !== 'true') vscode.postMessage({ type: 'setWaveSetting', id: el.dataset.wave, seed: el.dataset.seed });
+      const on = el.getAttribute('aria-pressed') === 'true';
+      vscode.postMessage({ type: 'setWaveSetting', id: el.dataset.wave, seed: on ? null : el.dataset.seed });
     } else if (el.id === 'play') {
       if (needsGesture) return; // the gesture handler is already starting it
       if (state.remote) cmd('yandexMusic.playPause');

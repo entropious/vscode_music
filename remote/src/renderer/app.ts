@@ -2,6 +2,7 @@ import type { Bridge, LinkState } from '../bridge.ts';
 import { type PlaybackStatus, type RemoteMethod, type RemoteMethods, type SharedState, type Source, type Track, artistLine, baseId, coverUrl, fullTitle } from '../wire.ts';
 import { VideoStage, pickVisual } from './visuals.ts';
 import { CoverLayers, DEFAULT_PALETTE, type Palette, alignNewAnimations, alignToFrames, barHeights, paletteOf, preloadCover, recordOut, showCover } from '../../../media/nowArt.js';
+import { patchChildren } from '../../../media/patch.js';
 
 declare global {
   interface Window {
@@ -120,7 +121,7 @@ const volLabel = el('volLabel');
 const volFill = el('volFill');
 const volTrack = el('volTrack');
 const queueBtn = el<HTMLButtonElement>('queueBtn');
-const pills = { wave: el<HTMLButtonElement>('pillVibe'), tune: el<HTMLButtonElement>('pillTune'), liked: el<HTMLButtonElement>('pillLiked'), playlist: el<HTMLButtonElement>('pillPlaylists') };
+const pills = { wave: el<HTMLButtonElement>('pillVibe'), tune: el<HTMLButtonElement>('pillTune'), liked: el<HTMLButtonElement>('pillLiked') };
 const tabs: Record<TabWithButton, HTMLButtonElement> = { queue: el('tabQueue'), liked: el('tabLiked'), playlists: el('tabPlaylists'), search: el('tabSearch') };
 const panes: Record<Tab, HTMLElement> = { queue: el('queuePane'), liked: el('likedPane'), playlists: el('playlistsPane'), search: el('searchPane'), vibe: el('vibePane') };
 const query = el<HTMLInputElement>('query');
@@ -385,7 +386,6 @@ function renderNow(): void {
   const kind = state?.source?.kind;
   setAttr(pills.wave, 'aria-pressed', String(kind === 'wave'));
   setAttr(pills.liked, 'aria-pressed', String(kind === 'liked'));
-  setAttr(pills.playlist, 'aria-pressed', String(kind === 'playlist'));
 
   const acc = state?.account;
   const avatar = el('avatar');
@@ -426,8 +426,18 @@ const PROGRESS_TICK_MS = 250;
 
 // ---------------------------------------------------------------- drawer
 
-function trackRow(t: Track, opts: { current?: boolean; past?: boolean; onPlay: () => void }): HTMLButtonElement {
+/** Puts the nodes in a pane, keeping the nodes there that stay the same (see media/patch.js). */
+function fill(target: Node, ...nodes: Node[]): void {
+  const next = document.createDocumentFragment();
+  next.append(...nodes);
+  patchChildren(target, next);
+}
+
+/** A track in one of the drawer's lists; pick() plays it from the list it's in. */
+function trackRow(t: Track, list: 'queue' | 'liked' | 'search', index: number, opts: { current?: boolean; past?: boolean }): HTMLButtonElement {
   const row = h('button', 'row');
+  row.dataset['list'] = list;
+  row.dataset['i'] = String(index);
   row.classList.toggle('current', !!opts.current);
   row.classList.toggle('past', !!opts.past);
   row.classList.toggle('na', t.available === false);
@@ -453,8 +463,46 @@ function trackRow(t: Track, opts: { current?: boolean; past?: boolean; onPlay: (
   if (t.durationMs) {
     row.append(h('span', 'd', fmt(t.durationMs / 1000)));
   }
-  row.addEventListener('click', opts.onPlay);
   return row;
+}
+
+/**
+ * Clicks in the drawer's lists. Each item says what it is, and what it plays is taken from the
+ * state at the time of the click, so an item kept across updates never acts on what it showed
+ * before.
+ */
+function pick(e: Event): void {
+  const b = e.target instanceof Element ? e.target.closest<HTMLElement>('button') : null;
+  const s = state;
+  if (!b || !s) {
+    return;
+  }
+  const { list, i, station, wave, seed, playlist, tile } = b.dataset;
+  if (list !== undefined && i !== undefined) {
+    const n = Number(i);
+    if (list === 'queue') {
+      void run('playIndex', n);
+    } else if (list === 'liked') {
+      void run('playTracks', [...(s.likedTracks ?? [])], n, { kind: 'liked' });
+    } else if (list === 'search') {
+      void run('playTracks', [...s.searchResults], n, { kind: 'search', query: searchedQuery });
+    }
+  } else if (station !== undefined) {
+    const st = (s.searchStations ?? []).find((x) => x.id === station);
+    if (st) {
+      void run('playSource', { kind: 'station', id: st.id, name: st.name });
+    }
+  } else if (wave !== undefined && seed !== undefined) {
+    // Picking the chosen option again leaves the setting to Yandex Music.
+    void run('setWaveSetting', wave, s.waveSettings?.[wave] === seed ? null : seed);
+  } else if (tile === 'liked') {
+    showLiked();
+  } else if (playlist !== undefined) {
+    const p = s.playlists.find((x) => `${x.uid}:${x.kind}` === playlist);
+    if (p) {
+      void run('playSource', { kind: 'playlist', playlist: p });
+    }
+  }
 }
 
 function renderQueue(): void {
@@ -465,15 +513,12 @@ function renderQueue(): void {
     return;
   }
   lastQueueKey = key;
-  pane.replaceChildren();
   if (!s || !s.queue.length) {
-    pane.append(h('div', 'hint', 'The queue is empty. Start My Vibe or a playlist.'));
+    fill(pane, h('div', 'hint', 'The queue is empty. Start My Vibe or a playlist.'));
     return;
   }
   // The whole queue, as in the player panel; it scrolls to the current track when that changes.
-  s.queue.forEach((t, i) => {
-    pane.append(trackRow(t, { current: i === s.index, past: i < s.index, onPlay: () => void run('playIndex', i) }));
-  });
+  fill(pane, ...s.queue.map((t, i) => trackRow(t, 'queue', i, { current: i === s.index, past: i < s.index })));
   if (s.index !== scrolledIndex) {
     scrolledIndex = s.index;
     pane.querySelector('.row.current')?.scrollIntoView({ block: 'center' });
@@ -490,19 +535,16 @@ function renderLiked(): void {
     return;
   }
   lastLikedKey = key;
-  pane.replaceChildren();
   if (!s?.account) {
-    pane.append(h('div', 'hint', 'Sign in to Yandex Music in VS Code to see your Liked tracks.'));
+    fill(pane, h('div', 'hint', 'Sign in to Yandex Music in VS Code to see your Liked tracks.'));
     return;
   }
   if (!liked.length) {
-    pane.append(h('div', 'hint', likedLoading ? 'Loading Liked…' : 'No Liked tracks yet.'));
+    fill(pane, h('div', 'hint', likedLoading ? 'Loading Liked…' : 'No Liked tracks yet.'));
     return;
   }
   // Nothing plays until a track is picked; then Liked plays from it.
-  liked.forEach((t, i) => {
-    pane.append(trackRow(t, { current: !!cur && cur.id === t.id, onPlay: () => void run('playTracks', [...liked], i, { kind: 'liked' }) }));
-  });
+  fill(pane, ...liked.map((t, i) => trackRow(t, 'liked', i, { current: !!cur && cur.id === t.id })));
 }
 
 /** Shows the Liked list without playing it; it's loaded afresh each time. */
@@ -533,29 +575,25 @@ function renderVibe(): void {
     return;
   }
   lastVibeKey = key;
-  pane.replaceChildren();
   if (!groups.length) {
-    pane.append(h('div', 'hint', s?.account ? 'Loading My Vibe settings…' : 'Sign in to Yandex Music in VS Code to set up My Vibe.'));
+    fill(pane, h('div', 'hint', s?.account ? 'Loading My Vibe settings…' : 'Sign in to Yandex Music in VS Code to set up My Vibe.'));
     return;
   }
-  for (const g of groups) {
+  const rows = groups.map((g) => {
     const group = h('div', 'vibe-group');
     const chips = h('div', 'chips');
-    for (const o of g.options) {
-      const on = chosen[g.id] ? chosen[g.id] === o.seed : !!o.any;
+    // No option chosen is the "any" one, left to Yandex Music; clicking the chosen option again goes back to it.
+    for (const o of g.options.filter((x) => !x.any)) {
       const chip = h('button', 'chip', o.name);
-      chip.setAttribute('aria-pressed', String(on));
-      chip.addEventListener('click', () => {
-        if (!on) {
-          void run('setWaveSetting', g.id, o.any ? null : o.seed);
-        }
-      });
+      chip.dataset['wave'] = g.id;
+      chip.dataset['seed'] = o.seed;
+      chip.setAttribute('aria-pressed', String(chosen[g.id] === o.seed));
       chips.append(chip);
     }
     group.append(h('div', 'vibe-name', g.name), chips);
-    pane.append(group);
-  }
-  pane.append(h('div', 'hint', 'While My Vibe plays, the tracks after the current one change at once.'));
+    return group;
+  });
+  fill(pane, ...rows, h('div', 'hint', 'While My Vibe plays, the tracks after the current one change at once.'));
 }
 
 const TILE_COLORS: readonly (readonly [string, string])[] = [
@@ -567,14 +605,15 @@ const TILE_COLORS: readonly (readonly [string, string])[] = [
   ['#1E2028', '#FF4F9A'],
 ];
 
-function tile(name: string, sub: string, icon: SVGSVGElement, colors: readonly [string, string], isCurrent: boolean, onPick: () => void): HTMLButtonElement {
+/** A tile in Playlists; `data` says what pick() does with it. */
+function tile(name: string, sub: string, icon: SVGSVGElement, colors: readonly [string, string], isCurrent: boolean, data: Record<string, string>): HTMLButtonElement {
   const b = h('button', 'tile');
   b.classList.toggle('current', isCurrent);
+  Object.assign(b.dataset, data);
   const art = h('span', 'tile-art');
   art.style.background = `radial-gradient(circle at 30% 30%, ${colors[1]} 0 22%, transparent 22.5%), linear-gradient(140deg, ${colors[0]} 0%, #0B0D12 100%)`;
   art.append(icon);
   b.append(art, h('span', 'n', name), h('span', 'sub', sub));
-  b.addEventListener('click', onPick);
   return b;
 }
 
@@ -587,28 +626,21 @@ function renderPlaylists(): void {
     return;
   }
   lastPlaylistsKey = key;
-  pane.replaceChildren();
   if (!s?.account) {
-    pane.append(h('div', 'hint', 'Sign in to Yandex Music in VS Code to see your playlists.'));
+    fill(pane, h('div', 'hint', 'Sign in to Yandex Music in VS Code to see your playlists.'));
     return;
   }
   const grid = h('div', 'grid');
-  grid.append(
-    tile('Liked', 'Your collection', svgIcon('', '0 0 24 24', HEART, { fill: 'currentColor' }), TILE_COLORS[0] ?? ['#000', '#fff'], src?.kind === 'liked', () => {
-      showLiked();
-    }),
-  );
+  grid.append(tile('Liked', 'Your collection', svgIcon('', '0 0 24 24', HEART, { fill: 'currentColor' }), TILE_COLORS[0] ?? ['#000', '#fff'], src?.kind === 'liked', { tile: 'liked' }));
   for (const p of s.playlists) {
-    const isCurrent = src?.kind === 'playlist' && `${src.playlist.uid}:${src.playlist.kind}` === `${p.uid}:${p.kind}`;
-    const colors = TILE_COLORS[hash(`${p.uid}:${p.kind}`) % TILE_COLORS.length] ?? ['#000', '#fff'];
+    const id = `${p.uid}:${p.kind}`;
+    const isCurrent = src?.kind === 'playlist' && `${src.playlist.uid}:${src.playlist.kind}` === id;
+    const colors = TILE_COLORS[hash(id) % TILE_COLORS.length] ?? ['#000', '#fff'];
     const sub = `${p.trackCount} ${p.trackCount === 1 ? 'track' : 'tracks'}`;
     const icon = svgIcon('', '0 0 24 24', NOTES, { fill: 'none', stroke: 'currentColor', 'stroke-width': '1.8', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' });
-    grid.append(tile(p.title, sub, icon, colors, isCurrent, () => void run('playSource', { kind: 'playlist', playlist: p })));
+    grid.append(tile(p.title, sub, icon, colors, isCurrent, { playlist: id }));
   }
-  pane.append(grid);
-  if (!s.playlists.length) {
-    pane.append(h('div', 'hint', playlistsRequested ? 'Loading playlists…' : 'No playlists yet.'));
-  }
+  fill(pane, grid, ...(s.playlists.length ? [] : [h('div', 'hint', playlistsRequested ? 'Loading playlists…' : 'No playlists yet.')]));
 }
 
 function renderSearch(): void {
@@ -624,9 +656,10 @@ function renderSearch(): void {
     return;
   }
   lastSearchKey = key;
-  searchList.replaceChildren();
+  const rows: HTMLElement[] = [];
   for (const st of stations) {
     const row = h('button', 'row');
+    row.dataset['station'] = st.id;
     row.classList.toggle('current', s?.source?.kind === 'station' && s.source.id === st.id);
     const thumb = h('span', 'thumb');
     if (st.color && /^#[0-9a-f]{3,8}$/i.test(st.color)) {
@@ -644,13 +677,11 @@ function renderSearch(): void {
     const text = h('span', 'text');
     text.append(h('span', 't', st.name), h('span', 'a', 'Genre station'));
     row.append(thumb, text);
-    row.addEventListener('click', () => void run('playSource', { kind: 'station', id: st.id, name: st.name }));
-    searchList.append(row);
+    rows.push(row);
   }
   const cur = current();
-  results.forEach((t, i) => {
-    searchList.append(trackRow(t, { current: !!cur && cur.id === t.id, onPlay: () => void run('playTracks', [...results], i, { kind: 'search', query: searchedQuery }) }));
-  });
+  results.forEach((t, i) => rows.push(trackRow(t, 'search', i, { current: !!cur && cur.id === t.id })));
+  fill(searchList, ...rows);
 }
 
 function renderDrawer(): void {
@@ -788,7 +819,6 @@ function like(): void {
 pills.wave.addEventListener('click', () => void run('playSource', { kind: 'wave' }));
 pills.tune.addEventListener('click', () => openDrawer(!(drawerOpen && tab === 'vibe'), 'vibe'));
 pills.liked.addEventListener('click', showLiked);
-pills.playlist.addEventListener('click', () => openDrawer(true, 'playlists'));
 queueBtn.addEventListener('click', () => openDrawer(!drawerOpen));
 el('closeDrawer').addEventListener('click', () => openDrawer(false));
 for (const k of Object.keys(tabs) as TabWithButton[]) {
@@ -803,6 +833,9 @@ genreBtn.addEventListener('click', () => {
   }
 });
 upNext.addEventListener('click', () => void run('next'));
+for (const pane of Object.values(panes)) {
+  pane.addEventListener('click', pick);
+}
 playBtn.addEventListener('click', () => void run('playPause'));
 el('prevBtn').addEventListener('click', () => void run('previous'));
 el('nextBtn').addEventListener('click', () => void run('next'));

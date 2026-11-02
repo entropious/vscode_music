@@ -119,12 +119,11 @@ body.hidden-view *, body.hidden-view *::before, body.hidden-view *::after { anim
 .vol .v { font-family: var(--mono); font-size: 11px; width: 22px; text-align: right; }
 
 /* ------------------------------------------------------------ quick start and tabs */
-.quick { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); gap: 8px; }
+.quick { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; }
 .quick button { min-width: 0; height: 48px; border: 1px solid var(--border); border-radius: 12px; background: var(--card); color: var(--fg); display: flex; align-items: center; justify-content: center; gap: 6px; padding: 0 8px; font-size: 13px; font-weight: 500; white-space: nowrap; overflow: hidden; }
 .quick button:hover { background: var(--hover); }
 .quick button span:last-child { overflow: hidden; text-overflow: ellipsis; }
 .quick .wave-ic { color: var(--accent-text); }
-.quick .heart-ic { color: var(--like); }
 /* My Vibe's settings: a narrow button beside Vibe unfolds them. */
 .quick .tune { width: 40px; padding: 0; color: var(--muted); }
 .quick .tune.on { color: var(--accent-text); border-color: color-mix(in srgb, var(--accent) 60%, transparent); }

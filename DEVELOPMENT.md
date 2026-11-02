@@ -70,6 +70,11 @@ The now-playing art (blurred cover background, cover placeholders, progress bar
 shapes, the cover's palette, and the record and breathing cover that only the app
 shows) is shared with the player panel: `media/nowArt.js` is bundled into the
 app, and `media/nowArt.css` and the placeholders are copied next to it.
+Both update their DOM with `media/patch.js`, which changes only the nodes that
+differ, never by replacing it wholesale (`innerHTML`, `replaceChildren`): a node
+replaced between a press and its release loses the click, and an input its focus.
+Clicks on list items go to one handler per list, which reads what the item is
+from its `data-*` attributes and takes the rest from the state at click time.
 
 When no service answers, the app starts one itself (`remote/src/launch.ts`): it
 finds the newest copy of the extension in `~/.vscode/extensions` (or Insiders,
