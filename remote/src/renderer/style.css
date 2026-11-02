@@ -83,7 +83,11 @@ button:focus-visible, .bars:focus-visible { outline: 3px solid var(--accent); ou
 .pills button:hover { background: rgba(255, 255, 255, .1); }
 .pills button[aria-pressed="true"] { background: var(--accent); color: #141416; }
 .pills .heart { fill: var(--like); }
-.pills .tune { width: 52px; padding: 0; justify-content: center; }
+/* Moved 12px towards Liked, whose own 24px of padding is empty while it isn't chosen, so that
+   the icon sits halfway between the Vibe pill and the Liked label; the row keeps its width. */
+.pills .tune { position: relative; width: 52px; padding: 0; justify-content: center; margin: 0 -12px 0 12px; }
+/* A dot at the round button's top right while some My Vibe setting is chosen rather than left to Yandex Music. */
+.pills .tune.set::after { content: ''; position: absolute; top: 7px; right: 7px; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); }
 .pills .tune[aria-pressed="true"] { background: rgba(255, 204, 0, .18); color: var(--accent); }
 .pills button[aria-pressed="true"] .heart { fill: #141416; }
 .top-right { flex: 1 1 200px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }

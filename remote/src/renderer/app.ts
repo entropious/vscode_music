@@ -75,10 +75,16 @@ function hash(s: string): number {
   return x >>> 0;
 }
 
+/** The names of the My Vibe options chosen, rather than left to Yandex Music, in the settings' order. */
+function waveChoices(s: SharedState | undefined): string[] {
+  const chosen = s?.waveSettings ?? {};
+  return (s?.waveOptions ?? []).flatMap((g) => g.options.filter((o) => chosen[g.id] === o.seed).map((o) => o.name));
+}
+
 function sourceLabel(source: Source | undefined): string {
   switch (source?.kind) {
     case 'wave':
-      return 'My Vibe';
+      return ['My Vibe', ...waveChoices(state)].join(' · ');
     case 'station':
       return source.id.startsWith('track:') ? `Radio · ${source.name}` : `Station · ${source.name}`;
     case 'liked':
@@ -355,6 +361,11 @@ function renderNow(): void {
     fitTitle();
   }
   setText(artist, t ? artistLine(t) : 'Start My Vibe or Liked above');
+  // The chosen My Vibe options are named in the label, which needs the settings' names.
+  if (state?.source?.kind === 'wave' && Object.keys(state.waveSettings ?? {}).length && !state.waveOptions?.length && !waveOptionsRequested) {
+    waveOptionsRequested = true;
+    void run('loadWaveSettings');
+  }
   const label = t ? sourceLabel(state?.source) : '';
   setText(sourceLabelEl, label);
   sourceWave.toggleAttribute('hidden', !(state?.source?.kind === 'wave' || state?.source?.kind === 'station'));
@@ -385,6 +396,10 @@ function renderNow(): void {
 
   const kind = state?.source?.kind;
   setAttr(pills.wave, 'aria-pressed', String(kind === 'wave'));
+  const waveTuned = Object.keys(state?.waveSettings ?? {}).length > 0;
+  pills.tune.classList.toggle('set', waveTuned);
+  setAttr(pills.tune, 'title', waveTuned ? 'My Vibe settings (changed)' : 'My Vibe settings');
+  setAttr(pills.tune, 'aria-label', waveTuned ? 'My Vibe settings, changed' : 'My Vibe settings');
   setAttr(pills.liked, 'aria-pressed', String(kind === 'liked'));
 
   const acc = state?.account;
@@ -818,7 +833,8 @@ function like(): void {
 
 pills.wave.addEventListener('click', () => void run('playSource', { kind: 'wave' }));
 pills.tune.addEventListener('click', () => openDrawer(!(drawerOpen && tab === 'vibe'), 'vibe'));
-pills.liked.addEventListener('click', showLiked);
+// Like the My Vibe settings button, a second click closes the drawer it opened.
+pills.liked.addEventListener('click', () => (drawerOpen && tab === 'liked' ? openDrawer(false) : showLiked()));
 queueBtn.addEventListener('click', () => openDrawer(!drawerOpen));
 el('closeDrawer').addEventListener('click', () => openDrawer(false));
 for (const k of Object.keys(tabs) as TabWithButton[]) {
