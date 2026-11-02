@@ -109,10 +109,54 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     vscode.window.showInformationMessage(token.trim() ? 'Genius token saved.' : 'Genius token removed.');
   };
 
-  /** Opens the fullscreen remote; it starts the player service itself if no window has. */
+  /** The version of the extension the installed remote was built with (see remote/scripts/package.ts). */
+  const remoteVersion = (app: string) =>
+    new Promise<string | undefined>((resolve) =>
+      execFile('plutil', ['-extract', 'CFBundleShortVersionString', 'raw', '-o', '-', `${app}/Contents/Info.plist`], (err, out) => resolve(err ? undefined : out.trim())),
+    );
+
+  /** Whether version `a` comes before `b`; one that isn't a version at all comes before any. */
+  const older = (a: string | undefined, b: string) => {
+    const parts = (v: string) => v.split('.').map(Number);
+    if (!a || !/^\d+(\.\d+)*$/.test(a)) {
+      return true;
+    }
+    const [x, y] = [parts(a), parts(b)];
+    for (let i = 0; i < Math.max(x.length, y.length); i++) {
+      if ((x[i] ?? 0) !== (y[i] ?? 0)) {
+        return (x[i] ?? 0) < (y[i] ?? 0);
+      }
+    }
+    return false;
+  };
+
+  /**
+   * Opens the fullscreen remote; it starts the player service itself if no window has. A remote
+   * built with an older version of the extension is offered an update first.
+   */
   const openRemote = async () => {
     await findRemote();
     const app = remoteApp;
+    if (app) {
+      const version = String(context.extension.packageJSON.version);
+      const built = await remoteVersion(app);
+      if (older(built, version)) {
+        const update = 'Update';
+        const open = 'Open Anyway';
+        const choice = await vscode.window.showInformationMessage(
+          `Yandex Music Remote is ${built && /^\d/.test(built) ? `from version ${built}` : 'from an older version'}, and this extension is ${version}. Update it? It is built again on this Mac, which takes a minute or two.`,
+          update,
+          open,
+        );
+        if (choice === update) {
+          installRemote();
+          return;
+        }
+        if (choice !== open) {
+          return;
+        }
+      }
+    }
     // `open` passes its environment on to the app, and VS Code's ELECTRON_RUN_AS_NODE would start
     // the app's Electron as plain Node, which quits at once.
     const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('ELECTRON_')));

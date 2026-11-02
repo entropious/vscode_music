@@ -8,6 +8,11 @@ import * as path from 'node:path';
 
 const root = path.join(import.meta.dir, '..');
 const archArg = process.argv.find((a) => a.startsWith('--arch='))?.slice('--arch='.length);
+/**
+ * The app carries the version of the extension it is built with, which the extension compares
+ * with its own when it opens the app, to offer an update.
+ */
+const { version } = (await Bun.file(path.join(root, '../package.json')).json()) as { version: string };
 
 const paths = await packager({
   dir: root,
@@ -15,6 +20,8 @@ const paths = await packager({
   name: 'Yandex Music Remote',
   appBundleId: 'net.entro.yandex-music-remote',
   appCategoryType: 'public.app-category.music',
+  appVersion: version,
+  buildVersion: version,
   platform: 'darwin',
   arch: archArg === 'x64' || archArg === 'arm64' ? archArg : ['arm64', 'x64'],
   icon: path.join(root, 'build/icon.icns'),

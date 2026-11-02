@@ -40,12 +40,13 @@ SRC="$CACHE/source"
 if [ -n "${YM_REMOTE_SOURCE:-}" ]; then
   step "Taking the source from $YM_REMOTE_SOURCE"
   rm -rf "$SRC" && mkdir -p "$SRC"
-  # The app's build takes media/ (the art shared with the extension) from next to remote/.
-  (cd "$YM_REMOTE_SOURCE" && tar -c --exclude node_modules --exclude out --exclude dist remote media) | tar -x -C "$SRC"
+  # The app's build takes media/ (the art shared with the extension) from next to remote/, and its
+  # version from the extension's package.json.
+  (cd "$YM_REMOTE_SOURCE" && tar -c --exclude node_modules --exclude out --exclude dist remote media package.json) | tar -x -C "$SRC"
 else
   step "Downloading the source ($REF)"
   rm -rf "$SRC" && mkdir -p "$SRC"
-  curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$REF" | tar -xz -C "$SRC" --strip-components=1 '*/remote' '*/media'
+  curl -fsSL "https://codeload.github.com/$REPO/tar.gz/$REF" | tar -xz -C "$SRC" --strip-components=1 '*/remote' '*/media' '*/package.json'
 fi
 
 step "Installing its dependencies"
