@@ -77,19 +77,25 @@ export type Message =
   | { type: 'notice'; text: string };
 
 /**
- * Fingerprint of the service's code, so a window can tell a service of another build: every
- * module in `outDir` (the service loads the player core and the API client from there too)
- * plus the audio helper.
+ * Fingerprint of the service's code, so a window can tell a service of another build: service.js
+ * in `outDir` and every module it requires from there, one after another (the player core, the
+ * API client and so on), plus the audio helper. Modules only a window loads, such as extension.js,
+ * are left out, so a change to them doesn't make the windows replace the service and stop the music.
  */
 export function serviceBuild(outDir: string, helper: string): { build: string; builtAt: number } {
-  const files = [
-    ...fs
-      .readdirSync(outDir)
-      .filter((f) => f.endsWith('.js'))
-      .sort()
-      .map((f) => path.join(outDir, f)),
-    helper,
-  ];
+  const modules: string[] = [];
+  const add = (name: string) => {
+    const file = path.join(outDir, `${name}.js`);
+    if (modules.includes(file) || !fs.existsSync(file)) {
+      return;
+    }
+    modules.push(file);
+    for (const [, dep] of fs.readFileSync(file, 'utf8').matchAll(/require\("\.\/([\w-]+)"\)/g)) {
+      add(dep);
+    }
+  };
+  add('service');
+  const files = [...modules.sort(), helper];
   const hash = createHash('sha1');
   files.forEach((f) => hash.update(fs.readFileSync(f)));
   const builtAt = Math.max(...files.map((f) => fs.statSync(f).mtimeMs));
