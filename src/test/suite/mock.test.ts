@@ -167,6 +167,8 @@ suite('Yandex Music: logic against the mock API', function () {
     const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
     const before = await status();
     const id = api.player.core.current()!.id.split(':')[0];
+    // The previous test leaves this track loading: its stream is requested a moment later.
+    await waitFor("the current track's stream", async () => server.log.some((l) => l.startsWith('GET /get-mp3/') && l.endsWith(`/${id}.mp3`)));
     const streams = server.log.filter((l) => l.startsWith('GET /get-mp3/')).length;
     await vscode.commands.executeCommand('yandexMusic.trackRadio');
     const s = await status();
