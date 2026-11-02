@@ -9,8 +9,6 @@ import { ServiceClient } from './serviceClient';
 import { SLOPLESS_API } from './slop';
 import { PlayerSync } from './sync';
 
-/** The fullscreen remote's macOS bundle ID, `appBundleId` in `remote/scripts/package.ts`. */
-const REMOTE_BUNDLE_ID = 'net.entro.yandex-music-remote';
 const REMOTE_APP = 'Yandex Music Remote.app';
 const REMOTE_DOCS = 'https://github.com/entropious/vscode_music#fullscreen-remote-macos';
 /** The repository whose remote/scripts/install.sh builds and installs the remote. */
@@ -71,18 +69,14 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     await player.refreshAccount();
   };
 
-  /** Where Yandex Music Remote, the fullscreen app in `remote/`, is installed on macOS. */
-  let remoteApp: string | undefined;
-  const findRemote = async () => {
-    if (process.platform !== 'darwin') {
-      return;
-    }
-    const home = process.env.HOME ?? '';
-    remoteApp = [`/Applications/${REMOTE_APP}`, `${home}/Applications/${REMOTE_APP}`].find((p) => fs.existsSync(p));
-    // Anywhere else, Spotlight knows it by its bundle ID.
-    remoteApp ??= await new Promise<string | undefined>((resolve) =>
-      execFile('mdfind', [`kMDItemCFBundleIdentifier == '${REMOTE_BUNDLE_ID}'`], (err, out) => resolve(err ? undefined : out.split('\n').find((l) => l.endsWith('.app')))),
-    );
+  /**
+   * Where Yandex Music Remote, the fullscreen app in `remote/`, is installed on macOS: in
+   * ~/Applications, where the install script puts it. A copy anywhere else, such as a build in a
+   * checkout, doesn't count.
+   */
+  const findRemote = (): string | undefined => {
+    const app = `${process.env.HOME ?? ''}/Applications/${REMOTE_APP}`;
+    return process.platform === 'darwin' && fs.existsSync(app) ? app : undefined;
   };
 
   /**
@@ -135,37 +129,12 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
    * built with an older version of the extension is offered an update first.
    */
   const openRemote = async () => {
-    await findRemote();
-    const app = remoteApp;
-    if (app) {
-      const version = String(context.extension.packageJSON.version);
-      const built = await remoteVersion(app);
-      if (older(built, version)) {
-        const update = 'Update';
-        const open = 'Open Anyway';
-        const choice = await vscode.window.showInformationMessage(
-          `Yandex Music Remote is ${built && /^\d/.test(built) ? `from version ${built}` : 'from an older version'}, and this extension is ${version}. Update it? It is built again on this Mac, which takes a minute or two.`,
-          update,
-          open,
-        );
-        if (choice === update) {
-          installRemote();
-          return;
-        }
-        if (choice !== open) {
-          return;
-        }
-      }
-    }
-    // `open` passes its environment on to the app, and VS Code's ELECTRON_RUN_AS_NODE would start
-    // the app's Electron as plain Node, which quits at once.
-    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('ELECTRON_')));
-    const opened = app && (await new Promise<boolean>((resolve) => execFile('open', [app], { env }, (err) => resolve(!err))));
-    if (!opened) {
+    const app = findRemote();
+    if (!app) {
       const install = 'Install';
       const more = 'Learn More';
       const choice = await vscode.window.showInformationMessage(
-        'Yandex Music Remote, the fullscreen app for the big screen that controls this player, is not installed. Install it? It is built on this Mac from the source of this version: about 120 MB to download and a few minutes, with Bun installed if there is none.',
+        "Yandex Music Remote, the fullscreen app that controls this player, isn't installed. Install it? It is built on this Mac: about 120 MB to download and a few minutes. Bun is installed too if you don't have it.",
         install,
         more,
       );
@@ -174,6 +143,32 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
       } else if (choice === more) {
         void vscode.env.openExternal(vscode.Uri.parse(REMOTE_DOCS));
       }
+      return;
+    }
+    const version = String(context.extension.packageJSON.version);
+    const built = await remoteVersion(app);
+    if (older(built, version)) {
+      const update = 'Update';
+      const open = 'Open Anyway';
+      const choice = await vscode.window.showInformationMessage(
+        `Yandex Music Remote was built with ${built && /^\d+(\.\d+)*$/.test(built) ? `version ${built} of this extension` : 'an older version of this extension'}, and this one is ${version}. Update it? It is built again on this Mac in a minute or two.`,
+        update,
+        open,
+      );
+      if (choice === update) {
+        installRemote();
+        return;
+      }
+      if (choice !== open) {
+        return;
+      }
+    }
+    // `open` passes its environment on to the app, and VS Code's ELECTRON_RUN_AS_NODE would start
+    // the app's Electron as plain Node, which quits at once.
+    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('ELECTRON_')));
+    const opened = await new Promise<boolean>((resolve) => execFile('open', [app], { env }, (err) => resolve(!err)));
+    if (!opened) {
+      vscode.window.showErrorMessage(`Couldn't open Yandex Music Remote at ${app}.`);
     }
   };
 

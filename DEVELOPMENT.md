@@ -119,17 +119,19 @@ bun run start      # build and open it; add -- --fullscreen to open it in full s
 bun run package    # dist/Yandex Music Remote-darwin-{arm64,x64}/Yandex Music Remote.app
 ```
 
-The app isn't signed: after copying it to `/Applications`, open it with right
-click → Open once, or run `xattr -dr com.apple.quarantine "/Applications/Yandex Music Remote.app"`.
+The app isn't signed: after copying it to `~/Applications`, where the extension
+looks for it, open it with right click → Open once, or run
+`xattr -dr com.apple.quarantine ~/Applications/"Yandex Music Remote.app"`.
 Users get it from `remote/scripts/install.sh`, which the extension runs in a
 terminal (Open Fullscreen Remote when the app isn't there, or Install Fullscreen
 Remote) at the tag of its own version: it installs Bun if needed, downloads
 `remote/` and `media/` at that tag, builds the app and puts it into
 `~/Applications`. `YM_REMOTE_SOURCE=<checkout> bash remote/scripts/install.sh`
 builds a local checkout the same way.
-The extension shows its **Open Fullscreen Remote** button once it finds the app
-in `/Applications`, `~/Applications` or, by its bundle ID
-`net.entro.yandex-music-remote`, through Spotlight.
+The extension's **Open Fullscreen Remote** looks for the app in `~/Applications`
+only, where the install script puts it, so a build in a checkout doesn't count.
+It compares the version in the app's `Info.plist` (the extension's version it
+was built with) with its own and offers an update when the app is older.
 
 Without macOS and a token, run it against a stand-in service with a made-up
 queue: `bun run mock` in one terminal, `bun run start` in
