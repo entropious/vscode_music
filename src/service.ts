@@ -19,6 +19,7 @@ import { type AudioOutput, type Logger, PlayerCore, REMOTE_METHODS, errorText } 
 import { Broadcaster, type Message, PROTOCOL, type ServiceSettings, readMessages, send, serviceBuild } from './protocol';
 import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
 import { VisualsLookup } from './visuals';
+import { loadWaveSettings, saveWaveSettings } from './waveSettingsFile';
 
 /** How long the service keeps playing with no window connected, so reloading a window doesn't stop the music. */
 const GRACE_MS = 8000;
@@ -303,10 +304,12 @@ const core = new PlayerCore(
       slopChecker.base = settings.sloplessBaseUrl;
       return slopChecker;
     },
+    saveWaveSettings: (s) => saveWaveSettings(path.dirname(logFile), s),
   },
   audio,
 );
 core.volume = settings.volume;
+core.waveSettings = loadWaveSettings(path.dirname(logFile));
 const loaded = loadSettings().catch((e) => log.warn(`settings: can't load them: ${errorText(e)}`));
 core.onDidChange(() => broadcaster.broadcast(clients, core.sharedState(), core.status));
 
@@ -421,7 +424,8 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
       return;
     case 'adopt':
       if (core.index < 0 && m.state.index >= 0) {
-        core.applySharedState(m.state);
+        // The service keeps its own My Vibe settings: the window's are those of when it last played.
+        core.applySharedState({ ...m.state, waveSettings: core.waveSettings });
         core.applyPlaybackStatus({ ...m.status, playing: false });
         log.info(`service: took over a queue of ${m.state.queue.length} tracks`);
       }

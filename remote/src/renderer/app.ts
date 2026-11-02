@@ -16,7 +16,9 @@ const DEFAULT_VOLUME = 0.7;
 const SEARCH_DELAY_MS = 450;
 const IDLE_MS = 3000;
 
-type Tab = 'queue' | 'playlists' | 'search';
+/** The drawer's panes; all but My Vibe's settings, which the tune button opens, have a tab. */
+type Tab = 'queue' | 'liked' | 'playlists' | 'search' | 'vibe';
+type TabWithButton = Exclude<Tab, 'vibe'>;
 
 function el<T extends HTMLElement = HTMLElement>(id: string): T {
   const e = document.getElementById(id);
@@ -118,9 +120,9 @@ const volLabel = el('volLabel');
 const volFill = el('volFill');
 const volTrack = el('volTrack');
 const queueBtn = el<HTMLButtonElement>('queueBtn');
-const pills = { wave: el<HTMLButtonElement>('pillVibe'), liked: el<HTMLButtonElement>('pillLiked'), playlist: el<HTMLButtonElement>('pillPlaylists') };
-const tabs: Record<Tab, HTMLButtonElement> = { queue: el('tabQueue'), playlists: el('tabPlaylists'), search: el('tabSearch') };
-const panes: Record<Tab, HTMLElement> = { queue: el('queuePane'), playlists: el('playlistsPane'), search: el('searchPane') };
+const pills = { wave: el<HTMLButtonElement>('pillVibe'), tune: el<HTMLButtonElement>('pillTune'), liked: el<HTMLButtonElement>('pillLiked'), playlist: el<HTMLButtonElement>('pillPlaylists') };
+const tabs: Record<TabWithButton, HTMLButtonElement> = { queue: el('tabQueue'), liked: el('tabLiked'), playlists: el('tabPlaylists'), search: el('tabSearch') };
+const panes: Record<Tab, HTMLElement> = { queue: el('queuePane'), liked: el('likedPane'), playlists: el('playlistsPane'), search: el('searchPane'), vibe: el('vibePane') };
 const query = el<HTMLInputElement>('query');
 const searchHint = el('searchHint');
 const searchList = el('searchList');
@@ -162,6 +164,12 @@ let playlistsRequested = false;
 let searchedQuery = '';
 let searching = false;
 let lastQueueKey = '';
+/** The queue's current track was last scrolled to at this index. */
+let scrolledIndex = -1;
+let lastLikedKey = '';
+let lastVibeKey = '';
+let likedLoading = false;
+let waveOptionsRequested = false;
 let lastPlaylistsKey = '';
 let lastSearchKey = '';
 let preMuteVolume = DEFAULT_VOLUME;
@@ -462,12 +470,92 @@ function renderQueue(): void {
     pane.append(h('div', 'hint', 'The queue is empty. Start My Vibe or a playlist.'));
     return;
   }
-  const start = Math.max(0, s.index - 1);
-  s.queue.slice(start).forEach((t, k) => {
-    const i = start + k;
+  // The whole queue, as in the player panel; it scrolls to the current track when that changes.
+  s.queue.forEach((t, i) => {
     pane.append(trackRow(t, { current: i === s.index, past: i < s.index, onPlay: () => void run('playIndex', i) }));
   });
-  pane.querySelector('.row.current')?.scrollIntoView({ block: 'nearest' });
+  if (s.index !== scrolledIndex) {
+    scrolledIndex = s.index;
+    pane.querySelector('.row.current')?.scrollIntoView({ block: 'center' });
+  }
+}
+
+function renderLiked(): void {
+  const s = state;
+  const pane = panes.liked;
+  const liked = s?.likedTracks ?? [];
+  const cur = current();
+  const key = JSON.stringify([liked.map((t) => t.id), cur?.id, s?.source?.kind, likedLoading, !!s?.account]);
+  if (key === lastLikedKey) {
+    return;
+  }
+  lastLikedKey = key;
+  pane.replaceChildren();
+  if (!s?.account) {
+    pane.append(h('div', 'hint', 'Sign in to Yandex Music in VS Code to see your Liked tracks.'));
+    return;
+  }
+  if (!liked.length) {
+    pane.append(h('div', 'hint', likedLoading ? 'Loading Liked…' : 'No Liked tracks yet.'));
+    return;
+  }
+  // Nothing plays until a track is picked; then Liked plays from it.
+  liked.forEach((t, i) => {
+    pane.append(trackRow(t, { current: !!cur && cur.id === t.id, onPlay: () => void run('playTracks', [...liked], i, { kind: 'liked' }) }));
+  });
+}
+
+/** Shows the Liked list without playing it; it's loaded afresh each time. */
+function showLiked(): void {
+  openDrawer(true, 'liked');
+  if (state?.account && !likedLoading) {
+    likedLoading = true;
+    renderDrawer();
+    void run('loadLikedTracks').finally(() => {
+      likedLoading = false;
+      renderDrawer();
+    });
+  }
+}
+
+/** My Vibe's settings: an option picked while My Vibe plays changes what follows the current track. */
+function renderVibe(): void {
+  const s = state;
+  const pane = panes.vibe;
+  const groups = s?.waveOptions ?? [];
+  if (s?.account && !groups.length && !waveOptionsRequested) {
+    waveOptionsRequested = true;
+    void run('loadWaveSettings');
+  }
+  const chosen = s?.waveSettings ?? {};
+  const key = JSON.stringify([groups, chosen]);
+  if (key === lastVibeKey) {
+    return;
+  }
+  lastVibeKey = key;
+  pane.replaceChildren();
+  if (!groups.length) {
+    pane.append(h('div', 'hint', s?.account ? 'Loading My Vibe settings…' : 'Sign in to Yandex Music in VS Code to set up My Vibe.'));
+    return;
+  }
+  for (const g of groups) {
+    const group = h('div', 'vibe-group');
+    const chips = h('div', 'chips');
+    for (const o of g.options) {
+      const on = chosen[g.id] ? chosen[g.id] === o.seed : !!o.any;
+      const chip = h('button', 'chip', o.name);
+      chip.setAttribute('aria-pressed', String(on));
+      chip.addEventListener('click', () => {
+        if (!on) {
+          void run('setWaveSetting', g.id, o.any ? null : o.seed);
+        }
+      });
+      chips.append(chip);
+    }
+    group.append(h('div', 'vibe-name', g.name), chips);
+    pane.append(group);
+  }
+  pane.append(h('div', 'hint', 'While My Vibe plays, the tracks after the current one change at once.'));
 }
 
 const TILE_COLORS: readonly (readonly [string, string])[] = [
@@ -507,7 +595,7 @@ function renderPlaylists(): void {
   const grid = h('div', 'grid');
   grid.append(
     tile('Liked', 'Your collection', svgIcon('', '0 0 24 24', HEART, { fill: 'currentColor' }), TILE_COLORS[0] ?? ['#000', '#fff'], src?.kind === 'liked', () => {
-      void run('playSource', { kind: 'liked' });
+      showLiked();
     }),
   );
   for (const p of s.playlists) {
@@ -568,15 +656,22 @@ function renderSearch(): void {
 function renderDrawer(): void {
   root.classList.toggle('drawer-open', drawerOpen);
   queueBtn.setAttribute('aria-pressed', String(drawerOpen));
-  for (const k of Object.keys(tabs) as Tab[]) {
+  for (const k of Object.keys(tabs) as TabWithButton[]) {
     tabs[k].setAttribute('aria-selected', String(k === tab));
+  }
+  for (const k of Object.keys(panes) as Tab[]) {
     panes[k].hidden = k !== tab;
   }
+  setAttr(pills.tune, 'aria-pressed', String(drawerOpen && tab === 'vibe'));
   if (!drawerOpen) {
     return;
   }
   if (tab === 'queue') {
     renderQueue();
+  } else if (tab === 'liked') {
+    renderLiked();
+  } else if (tab === 'vibe') {
+    renderVibe();
   } else if (tab === 'playlists') {
     if (state?.account && !state.playlists.length && !playlistsRequested) {
       playlistsRequested = true;
@@ -691,12 +786,13 @@ function like(): void {
 }
 
 pills.wave.addEventListener('click', () => void run('playSource', { kind: 'wave' }));
-pills.liked.addEventListener('click', () => void run('playSource', { kind: 'liked' }));
+pills.tune.addEventListener('click', () => openDrawer(!(drawerOpen && tab === 'vibe'), 'vibe'));
+pills.liked.addEventListener('click', showLiked);
 pills.playlist.addEventListener('click', () => openDrawer(true, 'playlists'));
 queueBtn.addEventListener('click', () => openDrawer(!drawerOpen));
 el('closeDrawer').addEventListener('click', () => openDrawer(false));
-for (const k of Object.keys(tabs) as Tab[]) {
-  tabs[k].addEventListener('click', () => openDrawer(true, k));
+for (const k of Object.keys(tabs) as TabWithButton[]) {
+  tabs[k].addEventListener('click', () => (k === 'liked' ? showLiked() : openDrawer(true, k)));
 }
 radioBtn.addEventListener('click', () => void run('startTrackRadio'));
 genreBtn.addEventListener('click', () => {

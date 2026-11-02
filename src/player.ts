@@ -1,8 +1,9 @@
 import * as vscode from 'vscode';
-import { type Account, type Playlist, type Track, YandexMusicClient, artistLine, coverUrl, fullTitle } from './api';
+import { type Account, type Playlist, type Track, type WaveSetting, YandexMusicClient, artistLine, coverUrl, fullTitle } from './api';
 import { renderCard } from './card';
 import { OutdatedWindowError } from './protocol';
 import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
+import { loadWaveSettings, saveWaveSettings } from './waveSettingsFile';
 import {
   AUDIO_METHODS,
   type AudioOutput,
@@ -110,9 +111,11 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
           slopChecker.base = config.get<string>('sloplessBaseUrl', SLOPLESS_API);
           return slopChecker;
         },
+        saveWaveSettings: (settings) => saveWaveSettings(storageUri.fsPath, settings),
       },
       webviewAudio,
     );
+    this.core.waveSettings = loadWaveSettings(storageUri.fsPath);
     this.disposables.push({ dispose: this.core.onDidChange((change) => (change === 'status' ? this.renderStatus() : this.render())) });
 
     const item = (id: string, priority: number, command: string, text: string, tooltip: string) => {
@@ -220,6 +223,15 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   }
   refreshAccount(): Promise<Account | undefined> {
     return this.run('refreshAccount', []);
+  }
+  loadLikedTracks(): Promise<Track[]> {
+    return this.run('loadLikedTracks', []);
+  }
+  loadWaveSettings(): Promise<WaveSetting[]> {
+    return this.run('loadWaveSettings', []);
+  }
+  setWaveSetting(id: string, seed: string | undefined): Promise<void> {
+    return this.run('setWaveSetting', [id, seed]);
   }
 
   /** Queues My Vibe on startup without playing it, unless the music already plays elsewhere. */
@@ -447,6 +459,18 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
         case 'loadPlaylists':
           await this.loadPlaylists();
           break;
+        case 'loadLiked':
+          await this.loadLikedTracks();
+          break;
+        case 'playLiked':
+          await this.playTracks([...this.core.likedTracks], m.index, { kind: 'liked' });
+          break;
+        case 'loadWaveSettings':
+          await this.loadWaveSettings();
+          break;
+        case 'setWaveSetting':
+          await this.setWaveSetting(m.id, m.seed ?? undefined);
+          break;
       }
     } catch (e) {
       this.showError(e);
@@ -511,6 +535,9 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       playlists: c.playlists.map((p) => ({ id: `${p.uid}:${p.kind}`, title: p.title, count: p.trackCount })),
       searchResults: c.searchResults.map((t) => this.viewTrack(t)),
       searchStations: c.searchStations.map((s) => ({ id: s.id, name: s.name, icon: s.icon, color: s.color })),
+      likedTracks: c.likedTracks.map((t) => this.viewTrack(t)),
+      waveOptions: c.waveOptions,
+      waveSettings: c.waveSettings,
       error: c.lastError ?? null,
       remote: !!this.remote,
       status: c.status,

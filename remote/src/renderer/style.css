@@ -83,6 +83,8 @@ button:focus-visible, .bars:focus-visible { outline: 3px solid var(--accent); ou
 .pills button:hover { background: rgba(255, 255, 255, .1); }
 .pills button[aria-pressed="true"] { background: var(--accent); color: #141416; }
 .pills .heart { fill: var(--like); }
+.pills .tune { width: 52px; padding: 0; justify-content: center; }
+.pills .tune[aria-pressed="true"] { background: rgba(255, 204, 0, .18); color: var(--accent); }
 .pills button[aria-pressed="true"] .heart { fill: #141416; }
 .top-right { flex: 1 1 200px; display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .queue-btn { height: 64px; padding: 0 24px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 20px; background: rgba(255, 255, 255, .08); display: flex; align-items: center; gap: 12px; font-size: 20px; font-weight: 600; transition: background-color .3s, border-color .3s; }
@@ -228,6 +230,13 @@ h1.cut { overflow-wrap: anywhere; }
 .search input { flex-grow: 1; min-width: 0; border: none; outline: none; background: transparent; color: #FFFFFF; font-family: inherit; font-size: 22px; user-select: text; }
 .search input::placeholder { color: rgba(255, 255, 255, .5); }
 .hint { padding: 12px 8px; font-size: 20px; line-height: 1.4; color: rgba(255, 255, 255, .66); }
+/* My Vibe's settings: a row of options for each. */
+.vibe-group { display: flex; flex-direction: column; gap: 12px; padding: 8px 6px 18px; }
+.vibe-name { font-size: 17px; font-weight: 600; letter-spacing: .04em; color: rgba(255, 255, 255, .66); }
+.chips { display: flex; flex-wrap: wrap; gap: 10px; }
+.chip { height: 56px; padding: 0 22px; border: 1px solid rgba(255, 255, 255, .18); border-radius: 999px; background: rgba(255, 255, 255, .06); font-size: 20px; font-weight: 500; transition: background-color .25s, color .25s; }
+.chip:hover { background: rgba(255, 255, 255, .12); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #141416; font-weight: 600; }
 .load-btn { height: 64px; border: 1px solid rgba(255, 255, 255, .16); border-radius: 20px; background: rgba(255, 255, 255, .08); font-size: 20px; font-weight: 600; }
 
 /* ------------------------------------------------------------ toast and overlay */

@@ -9,6 +9,9 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
 
   const saved = vscode.getState() || {};
   let tab = saved.tab || 'queue';
+  /** My Vibe's settings are unfolded under the quick buttons. */
+  let waveOpen = !!saved.waveOpen;
+  const saveView = () => vscode.setState({ tab, waveOpen });
   let searchQuery = '';
   /** @type {any} */
   let state = { signedOut: false, account: null, current: null, queue: [], index: -1, playlists: [], searchResults: [], source: '', liked: false, error: null };
@@ -58,6 +61,7 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
     search: svg('<path d="M11 4a7 7 0 1 1 0 14a7 7 0 1 1 0-14"/><path d="M20 20l-4-4"/>', 16, 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'),
     note: svg('<path d="M9 18V5l11-2v13"/><path d="M6 15a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/><path d="M17 13a3 3 0 1 1 0 6a3 3 0 1 1 0-6"/>', 18, line),
     list: svg('<path d="M9 6h11"/><path d="M9 12h11"/><path d="M9 18h11"/><path d="M4 6h.01"/><path d="M4 12h.01"/><path d="M4 18h.01"/>', 16, 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'),
+    tune: svg('<path d="M4 7h10"/><path d="M18 7h2"/><path d="M16 5v4"/><path d="M4 17h4"/><path d="M12 17h8"/><path d="M10 15v4"/>', 18, 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'),
     info: svg('<path d="M12 3a9 9 0 1 1 0 18a9 9 0 1 1 0-18"/><path d="M12 11v5"/><path d="M12 8v.01"/>', 16, 'fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"'),
   };
   const LOGO = `<svg width="72" height="72" viewBox="0 0 24 24" fill="none" stroke-linecap="round" stroke-linejoin="round"><rect width="24" height="24" rx="5.4" fill="#110503"/><g transform="translate(2.4 2.4) scale(0.8)"><path d="M7 4c-2 0-2.5 1-2.5 3v2c0 1.5-.8 2.5-2 3 1.2.5 2 1.5 2 3v2c0 2 .5 3 2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="M17 4c2 0 2.5 1 2.5 3v2c0 1.5.8 2.5 2 3-1.2.5-2 1.5-2 3v2c0 2-.5 3-2.5 3" stroke="#F4F1EA" stroke-width="1.9"/><path d="m130.863 57.739-.468-2.327-19.788-3.457 11.498-15.557-1.337-1.462-16.913 8.11 2.139-21.54-1.738-.997-10.295 17.418L82.395 12H80.39l2.74 25.064-29.08-23.269-2.474.732 22.396 28.122-44.323-14.76-2.006 2.261L67.22 52.686l-54.618 4.521-.602 3.39 56.757 6.184-47.33 39.157 2.005 2.726 56.356-30.648-11.164 53.983h3.41l21.592-50.792 13.17 39.756 2.34-1.795-5.415-40.42 20.524 23.268 1.337-2.128-15.711-28.853 21.928 8.111.201-2.46-19.655-14.493 18.518-4.454Z" transform="translate(5.55 6.9) scale(0.085)" fill="#FFEE00"/></g></svg>`;
@@ -128,6 +132,19 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
       </section>`;
   }
 
+  /** My Vibe's settings as rows of options; picking one restarts what follows the current track. */
+  function waveSettingsView() {
+    const groups = state.waveOptions || [];
+    if (!groups.length) return '<div class="card wave-settings"><div class="hint">Loading My Vibe settings…</div></div>';
+    const chosen = state.waveSettings || {};
+    return `<div class="card wave-settings">${groups.map((g) => `<div class="wave-group"><div class="wave-name">${esc(g.name)}</div><div class="chips">${g.options
+      .map((o) => {
+        const on = chosen[g.id] ? chosen[g.id] === o.seed : !!o.any;
+        return `<button class="chip ${on ? 'on' : ''}" data-wave="${esc(g.id)}" data-seed="${esc(o.seed)}" aria-pressed="${on}">${esc(o.name)}</button>`;
+      })
+      .join('')}</div></div>`).join('')}</div>`;
+  }
+
   function render() {
     const s = state;
     if (s.signedOut) {
@@ -148,6 +165,11 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
       body = s.playlists.length
         ? `<ul class="list" id="playlists">${s.playlists.map((p) => `<li data-id="${esc(p.id)}"><span class="thumb">${I.list}</span><div class="t"><div>${esc(p.title)}</div><div class="a">${p.count} ${p.count === 1 ? 'track' : 'tracks'}</div></div></li>`).join('')}</ul>`
         : `<button class="btn" id="loadPlaylists">Load playlists</button>`;
+    } else if (tab === 'liked') {
+      const liked = s.likedTracks || [];
+      body = liked.length
+        ? `<ul class="list" id="liked">${liked.map((t, i) => trackRow(t, i, !!cur && t.id === cur.id)).join('')}</ul>`
+        : `<div class="hint">${s.account ? 'Loading Liked…' : 'Sign in to see your Liked tracks.'}</div>`;
     } else if (tab === 'search') {
       const stations = s.searchStations || [];
       body = `<form class="searchbox" id="searchForm">${I.search}<input id="q" placeholder="Artist, track or genre…" value="${esc(searchQuery)}" aria-label="Search"><button type="submit">Search</button></form>
@@ -165,10 +187,13 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
       ${s.error ? `<div class="error">${esc(s.error)}</div>` : ''}
       <div class="quick">
         <button data-cmd="yandexMusic.playMyWave" title="Play My Vibe"><span class="wave-ic">${I.wave(18)}</span><span>Vibe</span></button>
-        <button data-cmd="yandexMusic.playLiked" title="Play Liked"><span class="heart-ic">${I.heartOn}</span><span>Liked</span></button>
+        <button class="tune ${waveOpen ? 'on' : ''}" id="waveTune" title="My Vibe settings" aria-label="My Vibe settings" aria-expanded="${waveOpen}">${I.tune}</button>
+        <button data-tab="liked" title="Show Liked"><span class="heart-ic">${I.heartOn}</span><span>Liked</span></button>
       </div>
+      ${waveOpen ? waveSettingsView() : ''}
       <div class="tabs">
         <button data-tab="queue" class="${tab === 'queue' ? 'active' : ''}">Queue</button>
+        <button data-tab="liked" class="${tab === 'liked' ? 'active' : ''}">Liked</button>
         <button data-tab="playlists" class="${tab === 'playlists' ? 'active' : ''}">Playlists</button>
         <button data-tab="search" class="${tab === 'search' ? 'active' : ''}">Search</button>
       </div>
@@ -323,9 +348,16 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
 
   // ------------------------------------------------------------------ events
   app.addEventListener('click', (ev) => {
-    const el = /** @type {HTMLElement} */ (ev.target).closest('[data-cmd],[data-tab],li,#play,#loadPlaylists');
+    const el = /** @type {HTMLElement} */ (ev.target).closest('[data-cmd],[data-tab],[data-wave],li,#play,#loadPlaylists,#waveTune');
     if (!el || el.id === 'gesture') return;
-    if (el.id === 'play') {
+    if (el.id === 'waveTune') {
+      waveOpen = !waveOpen;
+      saveView();
+      if (waveOpen && !(state.waveOptions || []).length) vscode.postMessage({ type: 'loadWaveSettings' });
+      render();
+    } else if (el.dataset.wave) {
+      if (el.getAttribute('aria-pressed') !== 'true') vscode.postMessage({ type: 'setWaveSetting', id: el.dataset.wave, seed: el.dataset.seed });
+    } else if (el.id === 'play') {
       if (needsGesture) return; // the gesture handler is already starting it
       if (state.remote) cmd('yandexMusic.playPause');
       else if (audio.src) audio.paused ? tryPlay() : audio.pause();
@@ -336,12 +368,15 @@ import { CoverLayers, alignNewAnimations, alignToFrames, barHeights, paletteOf, 
       cmd(el.dataset.cmd);
     } else if (el.dataset.tab) {
       tab = el.dataset.tab;
-      vscode.setState({ tab });
+      saveView();
       if (tab === 'playlists' && !state.playlists.length && state.account) vscode.postMessage({ type: 'loadPlaylists' });
+      // Liked is loaded afresh each time it's opened; it plays only from a track picked in it.
+      if (tab === 'liked' && state.account) vscode.postMessage({ type: 'loadLiked' });
       render();
     } else if (el.tagName === 'LI') {
       const list = el.parentElement && el.parentElement.id;
       if (list === 'queue') vscode.postMessage({ type: 'playIndex', index: Number(el.dataset.i) });
+      if (list === 'liked') vscode.postMessage({ type: 'playLiked', index: Number(el.dataset.i) });
       if (list === 'results') vscode.postMessage({ type: 'playSearchResult', index: Number(el.dataset.i), query: searchQuery });
       if (list === 'stations') vscode.postMessage({ type: 'playStation', id: el.dataset.id });
       if (list === 'playlists') {

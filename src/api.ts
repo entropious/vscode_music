@@ -61,6 +61,24 @@ interface DownloadInfo {
 
 export const WAVE_SEED = 'user:onyourwave';
 
+/** My Vibe's settings, as `settingRestrictions` of `/rotor/wave/settings` names them. */
+export const WAVE_SETTING_IDS = ['diversity', 'moodEnergy', 'language'] as const;
+
+/** An option of a My Vibe setting, such as a mood. */
+export interface WaveOption {
+  name: string;
+  /** The seed added to the radio session's, `settingMoodEnergy:fun`. */
+  seed: string;
+  /** The option that leaves the setting to Yandex Music, "any". */
+  any?: boolean;
+}
+
+export interface WaveSetting {
+  id: string;
+  name: string;
+  options: WaveOption[];
+}
+
 /** A radio station, e.g. a genre. */
 export interface Station {
   /** The radio seed, `genre:rock`. */
@@ -242,11 +260,32 @@ export class YandexMusicClient {
   }
 
   /**
+   * The settings of My Vibe and their options, named as Yandex Music names them: character
+   * (`diversity`), mood (`moodEnergy`), language. An option is a seed added to the session's.
+   */
+  async waveSettings(): Promise<WaveSetting[]> {
+    const r = await this.request<any>(`/rotor/wave/settings?${new URLSearchParams({ seeds: WAVE_SEED })}`);
+    const restrictions = r?.settingRestrictions ?? {};
+    return WAVE_SETTING_IDS.flatMap((id) => {
+      const e = restrictions[id];
+      if (e?.type !== 'enum' || !Array.isArray(e.possibleValues)) {
+        return [];
+      }
+      const options: WaveOption[] = e.possibleValues.map((v: any) => ({
+        name: String(v.name ?? v.value),
+        seed: String(v.serializedSeed ?? `setting${id[0]!.toUpperCase()}${id.slice(1)}:${v.value}`),
+        any: !!v.unspecified,
+      }));
+      return [{ id, name: String(e.name ?? id), options }];
+    });
+  }
+
+  /**
    * Starts a My Vibe radio session, which comes with a fresh selection. The station
    * endpoint below tends to return the same first batch every time listening starts.
    */
-  async waveStart(seed = WAVE_SEED): Promise<WaveBatch> {
-    const r = await this.request<any>('/rotor/session/new', { json: { seeds: [seed], includeTracksInResponse: true } });
+  async waveStart(seeds: string[] = [WAVE_SEED]): Promise<WaveBatch> {
+    const r = await this.request<any>('/rotor/session/new', { json: { seeds, includeTracksInResponse: true } });
     return waveBatch(r, r.radioSessionId);
   }
 

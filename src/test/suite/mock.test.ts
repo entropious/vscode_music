@@ -178,6 +178,34 @@ suite('Yandex Music: logic against the mock API', function () {
     assert.strictEqual(server.log.filter((l) => l.startsWith('GET /get-mp3/')).length, streams, 'the track is not reloaded');
   });
 
+  test('Liked is shown without playing it, and plays from the track picked in it', async () => {
+    const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
+    const before = await status();
+    const liked = await api.player.loadLikedTracks();
+    assert.ok(liked.length > 0, 'Liked has tracks');
+    const after = await status();
+    assert.strictEqual(after.title, before.title, 'the track goes on');
+    assert.strictEqual(after.source, before.source, 'the queue stays');
+    await api.player.playTracks(liked, 0, { kind: 'liked' });
+    assert.strictEqual((await status()).source, 'Liked');
+  });
+
+  test("My Vibe's settings go to its radio session as seeds, and the current track goes on", async () => {
+    const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
+    await vscode.commands.executeCommand('yandexMusic.playMyWave');
+    await waitFor('My Vibe', async () => (await status()).source === 'My Vibe');
+    const settings = await api.player.loadWaveSettings();
+    assert.ok(settings.some((s) => s.id === 'language'), 'the usual settings when the API has none');
+    const before = await status();
+    await api.player.setWaveSetting('language', 'settingLanguage:without-words');
+    assert.deepStrictEqual(server.seeds.slice(-2), ['user:onyourwave', 'settingLanguage:without-words']);
+    const after = await status();
+    assert.strictEqual(after.title, before.title, 'the track goes on');
+    assert.strictEqual(after.index, 0);
+    await api.player.setWaveSetting('language', undefined);
+    assert.deepStrictEqual(server.seeds.slice(-1), ['user:onyourwave']);
+  });
+
   test('search and Liked', async () => {
     await vscode.commands.executeCommand('yandexMusic.search', 'Test', 4);
     await waitFor('the track from search', async () => {
