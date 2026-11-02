@@ -158,6 +158,8 @@ import { patch } from './patch.js';
       ? `<div class="account"><span class="avatar">${esc((s.account.name || s.account.login || '?').trim().charAt(0).toUpperCase())}</span><span class="name">${esc(s.account.name || s.account.login)}</span><button class="icon-btn" data-cmd="yandexMusic.signOut" title="Sign out" aria-label="Sign out">${I.logout}</button></div>`
       : '';
     const cur = s.current;
+    /** Some My Vibe setting is chosen rather than left to Yandex Music. */
+    const waveTuned = Object.keys(s.waveSettings || {}).length > 0;
 
     let body = '';
     if (tab === 'queue') {
@@ -189,7 +191,7 @@ import { patch } from './patch.js';
       ${s.error ? `<div class="error">${esc(s.error)}</div>` : ''}
       <div class="quick">
         <button data-cmd="yandexMusic.playMyWave" title="Play My Vibe"><span class="wave-ic">${I.wave(18)}</span><span>Vibe</span></button>
-        <button class="tune ${waveOpen ? 'on' : ''}" id="waveTune" title="My Vibe settings" aria-label="My Vibe settings" aria-expanded="${waveOpen}">${I.tune}</button>
+        <button class="tune ${waveOpen ? 'on' : ''} ${waveTuned ? 'set' : ''}" id="waveTune" title="${waveTuned ? 'My Vibe settings (changed)' : 'My Vibe settings'}" aria-label="${waveTuned ? 'My Vibe settings, changed' : 'My Vibe settings'}" aria-expanded="${waveOpen}">${I.tune}</button>
       </div>
       ${waveOpen ? waveSettingsView() : ''}
       <div class="tabs">
