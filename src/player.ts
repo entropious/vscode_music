@@ -68,8 +68,10 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
   private unlocked = false;
   private gestureHintShown = false;
   private lastTooltip?: string;
-  /** Cover of the current track for the status bar card, as a data: URI fetched once per track. */
-  private cardCover?: { url: string; data?: string };
+  /** Covers for the status bar card as data: URIs, for the current track and its neighbours in the queue. */
+  private readonly cardCovers = new Map<string, string>();
+  /** The last known stream format: a new track's card shows it until its own is known. */
+  private cardStreamInfo?: string;
 
   private readonly prevItem: vscode.StatusBarItem;
   private readonly playItem: vscode.StatusBarItem;
@@ -595,29 +597,22 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     }
   }
 
-  /** Cover for the card. While it loads, the card renders with a placeholder and is redrawn afterwards. */
-  private cardCoverFor(t: Track): string | undefined {
-    const url = coverUrl(t.coverUri, 200);
-    if (!url) {
-      return undefined;
-    }
-    if (this.cardCover?.url !== url) {
-      const entry: { url: string; data?: string } = { url };
-      this.cardCover = entry;
+  /** Cover for the card, loaded once; a track's cover is loaded ahead while it is a neighbour of the current one. */
+  private cardCover(t: Track | undefined): string | undefined {
+    const url = t && coverUrl(t.coverUri, 200);
+    if (url && !this.cardCovers.has(url)) {
+      this.cardCovers.set(url, '');
       fetch(url)
         .then(async (r) => {
-          if (!r.ok) {
-            return;
-          }
-          const type = r.headers.get('content-type') ?? 'image/jpeg';
-          entry.data = `data:${type};base64,${Buffer.from(await r.arrayBuffer()).toString('base64')}`;
-          if (this.cardCover === entry) {
+          if (r.ok && this.cardCovers.has(url)) {
+            const type = r.headers.get('content-type') ?? 'image/jpeg';
+            this.cardCovers.set(url, `data:${type};base64,${Buffer.from(await r.arrayBuffer()).toString('base64')}`);
             this.updateStatusBar();
           }
         })
         .catch(() => undefined);
     }
-    return this.cardCover.data;
+    return (url && this.cardCovers.get(url)) || undefined;
   }
 
   /** Mini player: the track card in the status bar, shown on hover and on click. */
@@ -627,14 +622,21 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
     md.isTrusted = { enabledCommands: CARD_COMMANDS };
     md.supportHtml = true;
     if (t) {
+      this.cardStreamInfo = c.streamInfo ?? this.cardStreamInfo;
+      // A skip mostly lands on a neighbour, with the same source and stream format.
+      const neighbours = [c.queue[c.index - 1], c.queue[c.index + 1]].filter((n): n is Track => !!n && n.id !== t.id);
+      const keep = new Set([t, ...neighbours].map((n) => coverUrl(n.coverUri, 200)));
+      [...this.cardCovers.keys()].filter((u) => !keep.has(u)).forEach((u) => this.cardCovers.delete(u));
+      neighbours.forEach((n) => this.cardCover(n));
       md.appendMarkdown(
         renderCard({
           title: fullTitle(t),
           artists: artistLine(t),
-          cover: this.cardCoverFor(t),
+          cover: this.cardCover(t),
           source: sourceLabel(c.source),
-          details: [fmtTime((t.durationMs ?? 0) / 1000), c.streamInfo].filter((x): x is string => !!x),
-          playing: c.status.playing,
+          details: [fmtTime((t.durationMs ?? 0) / 1000), this.cardStreamInfo].filter((x): x is string => !!x),
+          // While the stream loads, the button stays Pause, as it will be once the track plays.
+          playing: c.status.playing || (c.status.trackId === t.id && !c.status.duration),
           liked: c.liked.has(baseId(t.id)),
           ai: c.slop[baseId(t.id)] === true,
         }),
