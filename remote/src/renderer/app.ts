@@ -852,6 +852,15 @@ upNext.addEventListener('click', () => void run('next'));
 for (const pane of Object.values(panes)) {
   pane.addEventListener('click', pick);
 }
+// A click anywhere outside the drawer closes it, and does what it does there too. The buttons
+// that open the drawer open, switch or close it themselves.
+const drawerEl = el('drawer');
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (drawerOpen && t instanceof Node && t.isConnected && !drawerEl.contains(t) && !(t instanceof Element && t.closest('#queueBtn, #pillTune, #pillLiked'))) {
+    openDrawer(false);
+  }
+});
 playBtn.addEventListener('click', () => void run('playPause'));
 el('prevBtn').addEventListener('click', () => void run('previous'));
 el('nextBtn').addEventListener('click', () => void run('next'));
