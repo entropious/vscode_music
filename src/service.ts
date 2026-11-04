@@ -403,9 +403,10 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
       if (volumeChanged) {
         void core.setVolume(settings.volume);
       }
-      // The account is checked again with a new token: windows that reload together may say hello
-      // in any order, one still without its token, and the account found with that one would stay.
-      if (tokenChanged && core.accountChecked) {
+      // The account is checked again with a new token, since windows that reload together may say
+      // hello in any order, one still without its token; and when there is no account, since the
+      // last check may have failed for a reason gone by now.
+      if ((tokenChanged || !core.account) && core.accountChecked) {
         void core.refreshAccount().catch((e) => log.warn(`service: account: ${errorText(e)}`));
       }
       accept(socket, 'window');

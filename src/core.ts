@@ -87,6 +87,9 @@ export const REMOTE_METHODS = [
 ] as const;
 export type RemoteMethod = (typeof REMOTE_METHODS)[number];
 
+/** Delays before the retries of an account check that failed. */
+const ACCOUNT_RETRY_SECONDS = [1, 2, 4, 8];
+
 /** How many tracks' visuals the state carries besides the newest. */
 const VISUALS_KEPT = 7;
 
@@ -269,6 +272,12 @@ export class PlayerCore {
   account?: Account;
   /** Account status is known; without this the panel would flash the sign-in screen on startup. */
   accountChecked = false;
+  /**
+   * A failed account check is tried again ACCOUNT_RETRY_SECONDS later: right after the Mac
+   * wakes up, the API may turn away a good token until the network is up.
+   */
+  private accountRetry?: ReturnType<typeof setTimeout>;
+  private accountRetries = 0;
   status: PlaybackStatus = { playing: false, position: 0, duration: 0 };
   lastError?: string;
   /** Codec and bitrate of the current stream, e.g. MP3 at 320 kbps. */
@@ -420,7 +429,11 @@ export class PlayerCore {
 
   // ---------------------------------------------------------------- account
 
-  async refreshAccount(): Promise<Account | undefined> {
+  async refreshAccount(retry = false): Promise<Account | undefined> {
+    clearTimeout(this.accountRetry);
+    if (!retry) {
+      this.accountRetries = 0;
+    }
     const client = await this.host.client();
     this.liked.clear();
     this.disliked.clear();
@@ -443,6 +456,11 @@ export class PlayerCore {
     } catch (e) {
       this.account = undefined;
       this.lastError = errorText(e);
+      const delay = ACCOUNT_RETRY_SECONDS[this.accountRetries++];
+      this.host.log.warn(`Account: ${errorText(e)}${delay ? `; trying again in ${delay} s` : ''}`);
+      if (delay) {
+        this.accountRetry = setTimeout(() => void this.refreshAccount(true), delay * 1000);
+      }
     }
     this.accountChecked = true;
     this.changed();
