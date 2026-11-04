@@ -50,7 +50,10 @@ async function scenario(name, url) {
   const paused1 = h.last('status');
   await sleep(600);
   const paused2 = h.last('status');
-  results.paused = { playing: paused2?.playing, positionStill: round(paused1?.position) === round(paused2?.position) };
+  // Once paused, the helper stops polling: no status events at all a second later.
+  const before = h.events.length;
+  await sleep(1500);
+  results.paused = { playing: paused2?.playing, positionStill: round(paused1?.position) === round(paused2?.position), eventsWhilePaused: h.events.length - before };
   h.send({ cmd: 'seek', seconds: 6.5 });
   h.send({ cmd: 'play' });
   await sleep(2500);
@@ -71,7 +74,7 @@ async function scenario(name, url) {
   await server.close();
   console.log(JSON.stringify(out, null, 1));
   const failed = out.filter(
-    (r) => !r.ready || !r.aliveAfterNowPlaying || !(r.playing.position > 0.5) || !r.playing.playing || r.paused.playing || !r.paused.positionStill || !r.endedAfterSeek || !r.exitedOnStdinClose,
+    (r) => !r.ready || !r.aliveAfterNowPlaying || !(r.playing.position > 0.5) || !r.playing.playing || r.paused.playing || !r.paused.positionStill || r.paused.eventsWhilePaused > 0 || !r.endedAfterSeek || !r.exitedOnStdinClose,
   );
   console.log(failed.length ? `FAILED: ${failed.map((r) => r.name).join(', ')}` : 'PASSED');
   process.exit(failed.length ? 3 : 0);

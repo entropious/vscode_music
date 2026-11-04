@@ -3,7 +3,8 @@
 // Reads one JSON command per line on stdin and writes one JSON event per line on stdout.
 // Commands: {cmd:"load", url, position?, play?}, {cmd:"play"}, {cmd:"pause"},
 // {cmd:"seek", seconds}, {cmd:"volume", value}, {cmd:"nowPlaying", title, artist, duration}.
-// Events: {type:"status", ...} four times a second, {type:"ended"} when a track plays to the end,
+// Events: {type:"status", ...} four times a second while a track plays or loads, and after each
+// command; {type:"ended"} when a track plays to the end,
 // {type:"error", message}, {type:"remote", command, position?} when a media key or the system's
 // Now Playing controls are used (command: play, pause, toggle, next, previous, seek).
 // Exits when stdin closes, so it never outlives the service that started it.
@@ -45,6 +46,19 @@ const infoCenter = $.MPNowPlayingInfoCenter.defaultCenter;
 let nowPlaying = null;
 /** What Now Playing was last told, so it's only updated when playback actually changes. */
 let published = { playing: false, duration: 0 };
+/**
+ * The status timer runs only while there is something to report: it stops once a track is
+ * paused with its length known for two ticks in a row, and each command starts it again.
+ */
+let ticker = null;
+let idleTicks = 0;
+
+function startTicking() {
+  idleTicks = 0;
+  if (!ticker) {
+    ticker = $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(0.25, controller, 'onTick:', $(), true);
+  }
+}
 
 function send(event) {
   stdout.writeData($(JSON.stringify(event) + '\n').dataUsingEncoding($.NSUTF8StringEncoding));
@@ -126,6 +140,7 @@ function handle(command) {
   }
   send(status());
   publishNowPlaying();
+  startTicking();
 }
 
 /** A target for a media key or Now Playing control: reports it to the service. */
@@ -166,12 +181,19 @@ ObjC.registerSubclass({
     'onTick:': {
       types: ['void', ['id']],
       implementation: function () {
-        if (player.currentItem) {
-          const s = status();
-          send(s);
-          if (nowPlaying && (s.playing !== published.playing || Math.abs(s.duration - published.duration) > 0.5)) {
-            publishNowPlaying();
-          }
+        if (!player.currentItem) {
+          return;
+        }
+        const s = status();
+        send(s);
+        if (nowPlaying && (s.playing !== published.playing || Math.abs(s.duration - published.duration) > 0.5)) {
+          publishNowPlaying();
+        }
+        const idle = !s.playing && !s.buffering && (s.duration > 0 || !!s.error);
+        idleTicks = idle ? idleTicks + 1 : 0;
+        if (idleTicks >= 2) {
+          ticker.invalidate;
+          ticker = null;
         }
       },
     },
@@ -212,7 +234,6 @@ function run() {
   }
   center.addObserverSelectorNameObject(controller, 'onInput:', $.NSFileHandleReadCompletionNotification, stdin);
   stdin.readInBackgroundAndNotify;
-  $.NSTimer.scheduledTimerWithTimeIntervalTargetSelectorUserInfoRepeats(0.25, controller, 'onTick:', $(), true);
   send({ type: 'ready' });
   $.NSRunLoop.currentRunLoop.run;
 }
