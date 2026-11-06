@@ -51,7 +51,6 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
         aiLabels: config().get<boolean>('aiLabels', true),
         motionCovers: config().get<boolean>('remote.motionCovers', true),
         musicVideos: config().get<boolean>('remote.musicVideos', true),
-        detailedGenres: config().get<boolean>('remote.detailedGenres', true),
         geniusToken: await context.secrets.get(GENIUS_SECRET),
       }),
     );

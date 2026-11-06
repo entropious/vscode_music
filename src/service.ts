@@ -328,7 +328,7 @@ const visuals = new VisualsLookup(
     await loaded;
     return new YandexMusicClient(settings.apiBaseUrl, settings.token);
   },
-  () => ({ motionCovers: settings.motionCovers !== false, musicVideos: settings.musicVideos !== false, detailedGenres: settings.detailedGenres !== false, geniusToken: settings.geniusToken }),
+  () => ({ motionCovers: settings.motionCovers !== false, musicVideos: settings.musicVideos !== false, geniusToken: settings.geniusToken }),
   log,
 );
 /** Tracks whose visuals have been looked up or are being looked up. */

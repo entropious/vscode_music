@@ -134,7 +134,6 @@ const query = el<HTMLInputElement>('query');
 const searchHint = el('searchHint');
 const searchList = el('searchList');
 const genreBtn = el<HTMLButtonElement>('genreBtn');
-const tagsEl = el('tags');
 const toastEl = el('toast');
 const overlay = el('overlay');
 
@@ -396,7 +395,6 @@ function renderNow(): void {
     setAttr(genreBtn, 'title', `Play ${genre.title} radio`);
     genreBtn.style.setProperty('--genre', genre.color && /^#[0-9a-f]{3,8}$/i.test(genre.color) ? genre.color : '');
   }
-  setText(tagsEl, (visuals?.tags ?? []).slice(0, 3).join(' · '));
 
   const titleText = t ? fullTitle(t) : 'Nothing is playing';
   if (title.textContent !== titleText) {

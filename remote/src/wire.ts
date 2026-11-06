@@ -104,7 +104,6 @@ export interface WaveSetting {
 
 export interface TrackVisuals {
   genre?: { id: string; title: string; titleRu?: string; color?: string };
-  tags?: string[];
   musicVideo?: string;
   youtubeId?: string;
   video?: string;

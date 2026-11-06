@@ -42,8 +42,6 @@ export interface ServiceSettings {
   musicVideos?: boolean;
   /** Genius's API token, to look up music videos on Genius too. */
   geniusToken?: string;
-  /** For the fullscreen remote: finer genres from MusicBrainz; on unless a window says otherwise. */
-  detailedGenres?: boolean;
 }
 
 /** Messages between windows and the leader window or the service, one JSON object per line. */

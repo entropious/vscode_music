@@ -61,7 +61,6 @@ const state: SharedState = {
   visuals: {
     '1000': {
       genre: { id: 'electronics', title: 'Electronic', color: '#3FB7FF' },
-      tags: ['french house', 'big beat', 'electro'],
       motionCover: 'https://mvod.itunes.apple.com/itunes-assets/HLSMusic116/v4/ca/94/22/ca9422a4-30a3-6c7f-7c24-d02958d82742/P544849304_default.m3u8',
     },
     '1001': { genre: { id: 'pop', title: 'Pop', color: '#FF4F9A' }, youtubeId: 'dQw4w9WgXcQ' },

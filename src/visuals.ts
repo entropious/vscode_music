@@ -2,7 +2,7 @@ import type { Genre, Track, YandexMusicClient } from './api';
 import type { Logger } from './core';
 
 /**
- * What the fullscreen remote shows besides the cover: videos of a track and its genres. The
+ * What the fullscreen remote shows besides the cover: videos of a track and its genre. The
  * remote picks one video by its own order (a music video from the iTunes Store or YouTube, the
  * track's video shot, the artist's video, Apple Music's motion cover); the rest is there for it
  * to fall back on. Every video plays without sound.
@@ -10,8 +10,6 @@ import type { Logger } from './core';
 export interface TrackVisuals {
   /** The album's genre, with its names and color from `/genres`. */
   genre?: { id: string; title: string; titleRu?: string; color?: string };
-  /** Finer genres from MusicBrainz, found by the track's artist and title, most voted first. */
-  tags?: string[];
   /** A music video in the iTunes Store: its 30-second preview, MP4. */
   musicVideo?: string;
   /** A music video on YouTube, as Wikidata links it, or else Genius. */
@@ -28,16 +26,12 @@ export interface TrackVisuals {
 export interface VisualsOptions {
   motionCovers: boolean;
   musicVideos: boolean;
-  detailedGenres: boolean;
   /** Genius's API token, which the music videos are also looked up on Genius with. */
   geniusToken?: string;
 }
 
 const TIMEOUT_MS = 15000;
 const USER_AGENT = 'vscode-yandex-music (https://github.com/entropious/vscode_music)';
-/** MusicBrainz allows one request a second per client. */
-const MUSICBRAINZ_GAP_MS = 1100;
-const MUSICBRAINZ = 'https://musicbrainz.org/ws/2';
 
 async function getText(url: string, headers: Record<string, string> = {}): Promise<string> {
   const res = await fetch(url, { headers: { 'User-Agent': USER_AGENT, ...headers }, signal: AbortSignal.timeout(TIMEOUT_MS) });
@@ -81,75 +75,6 @@ class Cache<T> {
       }
     }
     return item;
-  }
-}
-
-/** A phrase for a Lucene query, as MusicBrainz's search takes. */
-const phrase = (s: string): string => `"${s.replace(/["\\]/g, '\\$&')}"`;
-
-/** How sure MusicBrainz's search must be of a recording, out of 100, for its genres to be taken. */
-const MUSICBRAINZ_MIN_SCORE = 90;
-/** How many people must have given an artist a genre for a track of theirs to get it. */
-const MUSICBRAINZ_MIN_ARTIST_VOTES = 2;
-
-/**
- * MusicBrainz's genres of a recording, found by its artist and title; requests go one at a
- * time, a second apart.
- */
-class MusicBrainz {
-  private queue: Promise<unknown> = Promise.resolve();
-  private last = 0;
-  private readonly cache = new Cache<string[]>();
-
-  private get(path: string): Promise<any> {
-    const attempt = async (): Promise<any> => {
-      const wait = this.last + MUSICBRAINZ_GAP_MS - Date.now();
-      if (wait > 0) {
-        await new Promise((r) => setTimeout(r, wait));
-      }
-      this.last = Date.now();
-      return getJson(`${MUSICBRAINZ}/${path}`);
-    };
-    // Connections to MusicBrainz drop now and then, and it answers 503 to a client that asks
-    // too often: one more try, a gap later, gets through.
-    const run = this.queue.then(() => attempt().catch(attempt));
-    this.queue = run.catch(() => undefined);
-    return run;
-  }
-
-  genres(artist: string, title: string): Promise<string[]> {
-    return this.cache.get(`${artist}\n${title}`, async () => {
-      const query = `recording:${phrase(title)} AND artist:${phrase(artist)}`;
-      const found = await this.get(`recording?${new URLSearchParams({ query, fmt: 'json', limit: '5' })}`);
-      const by = plain(artist);
-      const t = plain(title);
-      // Common titles have many recordings: only one by this artist under this very title will do.
-      const match = (found?.recordings ?? []).find(
-        (r: any) =>
-          (r.score ?? 0) >= MUSICBRAINZ_MIN_SCORE &&
-          plain(String(r.title ?? '')) === t &&
-          (r['artist-credit'] ?? []).some((c: any) => {
-            const who = plain(String(c.name ?? c.artist?.name ?? ''));
-            return who && (who.includes(by) || by.includes(who));
-          }),
-      );
-      const id = match?.id;
-      if (!id) {
-        return [];
-      }
-      const rec = await this.get(`recording/${id}?fmt=json&inc=genres+artist-credits`);
-      let genres: any[] = rec?.genres ?? [];
-      // A recording nobody has tagged gets its artist's genres, those that more than one person
-      // gave: a single vote on an artist is often a stray one, unlike the rest of their music.
-      const artistId = rec?.['artist-credit']?.[0]?.artist?.id;
-      if (!genres.length && artistId) {
-        genres = ((await this.get(`artist/${artistId}?fmt=json&inc=genres`))?.genres ?? []).filter((g: any) => (g.count ?? 0) >= MUSICBRAINZ_MIN_ARTIST_VOTES);
-      }
-      return genres
-        .sort((a, b) => (b.count ?? 0) - (a.count ?? 0))
-        .map((g) => String(g.name))
-        .slice(0, 4);
-    });
   }
 }
 
@@ -294,8 +219,8 @@ class GeniusVideos {
 }
 
 /**
- * Looks up a track's visuals in Yandex Music and, as the user allows, MusicBrainz, Apple Music,
- * the iTunes Store, Wikidata and Genius. Each source reports as soon as it answers; a source that fails
+ * Looks up a track's visuals in Yandex Music and, as the user allows, Apple Music, the iTunes
+ * Store, Wikidata and Genius. Each source reports as soon as it answers; a source that fails
  * is left out.
  */
 export class VisualsLookup {
@@ -304,7 +229,6 @@ export class VisualsLookup {
   private readonly log: Logger;
   private genres?: Promise<Map<string, Genre>>;
   private readonly artistVideos = new Cache<string | undefined>();
-  private readonly musicBrainz = new MusicBrainz();
   private readonly apple = new AppleMotion();
   private readonly appleVideos = new AppleMusicVideos();
   private readonly wikidata = new WikidataVideos();
@@ -337,9 +261,6 @@ export class VisualsLookup {
       ['genre', async () => add({ genre: album?.genre ? (await this.genreMap(client)).get(album.genre) ?? { id: album.genre, title: album.genre } : undefined })],
       ['artist video', async () => add({ artistVideo: artist ? await this.artistVideos.get(String(artist.id), () => client.artistVideo(artist.id)) : undefined })],
     ];
-    if (opts.detailedGenres && artist) {
-      tasks.push(['MusicBrainz', async () => add({ tags: (await this.musicBrainz.genres(artist.name, track.title)).filter((g) => plain(g) !== plain(found.genre?.title ?? '')) })]);
-    }
     if (opts.motionCovers && artist && album) {
       tasks.push(['Apple Music', async () => add({ motionCover: await this.apple.cover(artist.name, album.title) })]);
     }

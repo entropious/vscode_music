@@ -99,8 +99,6 @@ visible and stops when it is minimized or hidden; attaching alone asks for nothi
 - from the iTunes Search API, the music video's 30-second preview, by artist and
   title; from Wikidata and Genius, the music video's YouTube ID, checked with
   YouTube's oEmbed;
-- from MusicBrainz, genres of the recording found by artist and title (Yandex
-  Music gives no ISRC), a request a second at most;
 - from Apple Music, the motion cover: the album on the iTunes Search API, then
   the HLS playlists linked on its music.apple.com page, of which the square one.
 
