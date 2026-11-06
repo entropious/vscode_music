@@ -34,11 +34,8 @@ export interface ServiceSettings {
   apiBaseUrl: string;
   quality: 'high' | 'low';
   volume: number;
-  /** Mark AI-generated tracks: Yandex Music's labels, and Deezer's detections unless `deezerAiLabels` is false. */
+  /** Mark AI-generated tracks with Yandex Music's labels. */
   aiLabels: boolean;
-  deezerAiLabels?: boolean;
-  /** Where Deezer's detections are downloaded from; the default when absent. */
-  deezerAiDataUrl?: string;
   /** For the fullscreen remote: Apple Music's motion covers; on unless a window says otherwise. */
   motionCovers?: boolean;
   /** For the fullscreen remote: music videos from the iTunes Store, Wikidata and Genius; on unless a window says otherwise. */

@@ -145,10 +145,8 @@ These point the extension at a different API or OAuth server, such as a mock:
 |---|---|
 | `yandexMusic.apiBaseUrl` | `https://api.music.yandex.net` |
 | `yandexMusic.oauthBaseUrl` | `https://oauth.yandex.ru` |
-| `yandexMusic.deezerAiDataUrl` | the Slopless snapshot of Deezer's AI detections on GitHub |
 
 Yandex Music's AI label is the "AI use" (`Использование ИИ`) entry of
 `/tracks/{id}/credits`; `src/aiMarks.ts` tells "fully", "partly" and "possibly"
 apart by its wording, and takes a wording it doesn't know for "possibly". The mock
-API labels Test Track 2 there, and serves a Deezer snapshot at `/deezer-ai.json.gz`
-that flags Test Track 3's album.
+API labels Test Track 2 there.

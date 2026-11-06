@@ -66,7 +66,7 @@ body.hidden-view *, body.hidden-view *::before, body.hidden-view *::after { anim
 .cover { width: 64px; height: 64px; border-radius: 10px; flex: none; background-color: var(--chip); display: flex; align-items: center; justify-content: center; color: var(--muted); }
 .meta { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 3px; }
 .meta .source { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; color: var(--accent-text); white-space: nowrap; overflow: hidden; }
-/* An AI-generated track: Yandex Music's label or Deezer's detection (aiMarks.ts). */
+/* An AI-generated track, as Yandex Music labels it (aiMarks.ts). */
 .meta .ai-badge, .list .ai-badge { flex: none; padding: 0 5px; border-radius: 4px; font-size: 10px; font-weight: 700; line-height: 16px; color: var(--like); border: 1px solid color-mix(in srgb, var(--like) 55%, transparent); background: color-mix(in srgb, var(--like) 12%, transparent); }
 /* A narrow panel leaves little room next to the cover: the title and artist
    wrap onto a second line and are truncated only after it. */

@@ -93,8 +93,8 @@ export interface SharedState {
   waveSettings?: Record<string, string>;
 }
 
-/** Yandex Music's AI label (`full`, `partial`, `possible`), or Deezer's detection. */
-export type AiMark = 'full' | 'partial' | 'possible' | 'deezer';
+/** Yandex Music's AI label of a track, `AiMark` in `src/aiMarks.ts`. */
+export type AiMark = 'full' | 'partial' | 'possible';
 
 export interface WaveSetting {
   id: string;
