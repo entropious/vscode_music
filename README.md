@@ -123,7 +123,8 @@ sound, in this order:
    "Official Audio" upload);
 2. the track's video shot, Yandex Music's short looping video, in the cover's
    place;
-3. the artist's background video from Yandex Music;
+3. the artist's background video from Yandex Music, or else the wide video on
+   the artist's Apple Music page;
 4. the album's motion cover from Apple Music, in the cover's place.
 
 A video that fills the background brings up **Video** among the buttons at the
@@ -140,8 +141,9 @@ which knows the most of them: create an API client at
 [genius.com/api-clients](https://genius.com/api-clients), generate its Client
 Access Token and enter it with **Yandex Music: Set Genius Token for Music
 Videos** (VS Code keeps it with its secrets, the player service a copy in the
-login keychain). For the motion covers the album is looked up on
-the iTunes Search API and its page on music.apple.com. Turn these off with
+login keychain). For the motion covers and the artists' videos the album and the
+artist are looked up on the iTunes Search API and their pages on
+music.apple.com. Turn these off with
 `yandexMusic.remote.musicVideos` and `yandexMusic.remote.motionCovers`. With
 reduced motion turned on in macOS,
 the remote plays no videos.
@@ -166,7 +168,7 @@ off with `yandexMusic.aiLabels`.
 | `yandexMusic.volume` | `0.7` | Volume, 0–1. |
 | `yandexMusic.aiLabels` | `true` | Mark tracks that Yandex Music labels as AI-generated. |
 | `yandexMusic.remote.musicVideos` | `true` | Fullscreen remote: music videos, silent, from the iTunes Store and YouTube via Wikidata and Genius. |
-| `yandexMusic.remote.motionCovers` | `true` | Fullscreen remote: Apple Music's motion covers for tracks without a video. |
+| `yandexMusic.remote.motionCovers` | `true` | Fullscreen remote: Apple Music's motion covers and artists' videos for tracks without a video. |
 
 Source code, issues and building instructions are on
 [GitHub](https://github.com/entropious/vscode_music); see

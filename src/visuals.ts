@@ -16,7 +16,7 @@ export interface TrackVisuals {
   youtubeId?: string;
   /** The track's video shot: a short looping vertical video, MP4. */
   video?: string;
-  /** The artist's background video, MP4. */
+  /** The artist's background video: Yandex Music's (MP4), or else the wide one on the artist's Apple Music page (HLS). */
   artistVideo?: string;
   /** Apple Music's motion cover of the album: a square looping video, HLS. */
   motionCover?: string;
@@ -79,12 +79,36 @@ class Cache<T> {
 }
 
 /**
- * Apple Music's motion cover of an album: the album is found with the iTunes Search API, and
- * its page on music.apple.com links its videos as HLS playlists. Of these, the square one is
- * the cover; the page is read as it is, so this breaks when Apple changes the page.
+ * The first video linked on a page of music.apple.com, as an HLS playlist, whose picture is
+ * square or wide. The page is read as it is, so this breaks when Apple changes the page.
+ */
+async function appleMotion(page: string, shape: 'square' | 'wide'): Promise<string | undefined> {
+  const html = await getText(page, { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)' });
+  const playlists = [...new Set(html.match(/https:\/\/mvod\.itunes\.apple\.com\/itunes-assets\/[^"\s\\]+?\.m3u8/g) ?? [])].slice(0, 4);
+  for (const url of playlists) {
+    const ratios = [...(await getText(url)).matchAll(/RESOLUTION=(\d+)x(\d+)/g)].map((m) => Number(m[1]) / Number(m[2]));
+    if (ratios.some((r) => (shape === 'square' ? Math.abs(r - 1) < 0.1 : r > 1.5))) {
+      return url;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Apple Music's motion videos, found with the iTunes Search API: an album's motion cover, the
+ * square video on the album's page, and an artist's wide video on the artist's page.
  */
 class AppleMotion {
   private readonly cache = new Cache<string | undefined>();
+
+  artist(artist: string): Promise<string | undefined> {
+    return this.cache.get(`artist\n${artist}`, async () => {
+      const term = new URLSearchParams({ term: artist, entity: 'musicArtist', limit: '5', country: 'us' });
+      const results: any[] = (await getJson(`https://itunes.apple.com/search?${term}`))?.results ?? [];
+      const match = results.find((r) => plain(String(r.artistName ?? '')) === plain(artist));
+      return match?.artistLinkUrl ? appleMotion(String(match.artistLinkUrl).split('?')[0]!, 'wide') : undefined;
+    });
+  }
 
   cover(artist: string, album: string): Promise<string | undefined> {
     return this.cache.get(`${artist}\n${album}`, async () => {
@@ -97,19 +121,7 @@ class AppleMotion {
         const who = plain(String(r.artistName ?? ''));
         return a && name && (name === a || name.startsWith(`${a} `)) && (who.includes(by) || by.includes(who));
       });
-      const page = match?.collectionViewUrl ? String(match.collectionViewUrl).split('?')[0] : undefined;
-      if (!page) {
-        return undefined;
-      }
-      const html = await getText(page, { 'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)' });
-      const playlists = [...new Set(html.match(/https:\/\/mvod\.itunes\.apple\.com\/itunes-assets\/[^"\s\\]+?\.m3u8/g) ?? [])].slice(0, 3);
-      for (const url of playlists) {
-        const sizes = [...(await getText(url)).matchAll(/RESOLUTION=(\d+)x(\d+)/g)].map((m) => Number(m[1]) / Number(m[2]));
-        if (sizes.some((r) => Math.abs(r - 1) < 0.1)) {
-          return url;
-        }
-      }
-      return undefined;
+      return match?.collectionViewUrl ? appleMotion(String(match.collectionViewUrl).split('?')[0]!, 'square') : undefined;
     });
   }
 }
@@ -263,6 +275,18 @@ export class VisualsLookup {
     ];
     if (opts.motionCovers && artist && album) {
       tasks.push(['Apple Music', async () => add({ motionCover: await this.apple.cover(artist.name, album.title) })]);
+    }
+    if (opts.motionCovers && artist) {
+      tasks.push([
+        'Apple Music artist',
+        async () => {
+          const video = await this.apple.artist(artist.name);
+          // Yandex Music's own video of the artist comes first.
+          if (!found.artistVideo) {
+            add({ artistVideo: video });
+          }
+        },
+      ]);
     }
     if (opts.musicVideos && artist) {
       tasks.push(['iTunes music video', async () => add({ musicVideo: await this.appleVideos.video(artist.name, track.title) })]);

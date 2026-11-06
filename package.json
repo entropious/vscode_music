@@ -183,7 +183,7 @@
         "yandexMusic.remote.motionCovers": {
           "type": "boolean",
           "default": true,
-          "description": "Fullscreen remote: show Apple Music's motion cover of the album when the track has no video. The album is looked up on the iTunes Search API and music.apple.com."
+          "description": "Fullscreen remote: show Apple Music's motion cover of the album, or the wide video on the artist's page, when the track has no video. The album and the artist are looked up on the iTunes Search API and music.apple.com."
         },
         "yandexMusic.remote.musicVideos": {
           "type": "boolean",
