@@ -140,22 +140,43 @@ const overlay = el('overlay');
 
 /** Videos stay off for those who asked for less motion; the cover stays. */
 const stillPictures = window.matchMedia('(prefers-reduced-motion: reduce)');
+const VIDEO_FRONT_KEY = 'videoInFront';
+/**
+ * Whether videos are wanted in front of the player, as the Video button left it: kept across
+ * tracks, so the next track's video comes to the front at once, and across launches.
+ */
+let videoFront = (() => {
+  try {
+    return localStorage.getItem(VIDEO_FRONT_KEY) === '1';
+  } catch {
+    return false;
+  }
+})();
+
 const videos = new VideoStage(el('bgVideo'), el('tileVideo'), (place) => {
   root.dataset['video'] = place ?? '';
-  // Only a video that fills the background can come to the front; it goes back when it goes away.
+  // Only a video that fills the background can come to the front.
   setHidden(pills.video, place !== 'background');
-  if (place !== 'background') {
-    videoInFront(false);
-  }
+  showVideoFront();
 });
 
-/** Brings the background video to the front, over the whole player, or puts it back. */
-function videoInFront(front: boolean): void {
-  const on = front && root.dataset['video'] === 'background';
+function showVideoFront(): void {
+  const on = videoFront && root.dataset['video'] === 'background';
   root.classList.toggle('video-front', on);
   pills.video.setAttribute('aria-pressed', String(on));
   pills.video.title = on ? 'Back to the player' : 'Show the video';
-  if (on) {
+}
+
+/** Brings the background video to the front, over the whole player, or puts it back. */
+function videoInFront(front: boolean): void {
+  videoFront = front;
+  try {
+    localStorage.setItem(VIDEO_FRONT_KEY, front ? '1' : '0');
+  } catch {
+    // without storage it is kept until the app quits
+  }
+  showVideoFront();
+  if (front) {
     openDrawer(false);
   }
 }
@@ -866,7 +887,7 @@ pills.tune.addEventListener('click', () => openDrawer(!(drawerOpen && tab === 'v
 // Like the My Vibe settings button, a second click closes the drawer it opened.
 pills.liked.addEventListener('click', () => (drawerOpen && tab === 'liked' ? openDrawer(false) : showLiked()));
 queueBtn.addEventListener('click', () => openDrawer(!drawerOpen));
-pills.video.addEventListener('click', () => videoInFront(!root.classList.contains('video-front')));
+pills.video.addEventListener('click', () => videoInFront(!videoFront));
 el('closeDrawer').addEventListener('click', () => openDrawer(false));
 for (const k of Object.keys(tabs) as TabWithButton[]) {
   tabs[k].addEventListener('click', () => (k === 'liked' ? showLiked() : openDrawer(true, k)));
@@ -953,7 +974,7 @@ document.addEventListener('keydown', (e) => {
     q: () => openDrawer(!drawerOpen || tab !== 'queue', 'queue'),
     '/': () => openDrawer(true, 'search'),
     f: () => window.ym.toggleFullScreen(),
-    v: () => videoInFront(!root.classList.contains('video-front')),
+    v: () => !pills.video.hidden && videoInFront(!videoFront),
   };
   const act = action[e.key];
   if (act) {
