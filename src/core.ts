@@ -1,6 +1,6 @@
 import type { Account, Playlist, Station, Track, WaveBatch, WaveEvent, WaveSetting, YandexMusicClient } from './api';
 import { WAVE_SEED, artistLine, fullTitle } from './api';
-import type { SlopChecker } from './slop';
+import type { AiChecker, AiMark } from './aiMarks';
 import type { TrackVisuals } from './visuals';
 
 export type Source =
@@ -93,8 +93,8 @@ const ACCOUNT_RETRY_SECONDS = [1, 2, 4, 8];
 /** How many tracks' visuals the state carries besides the newest. */
 const VISUALS_KEPT = 7;
 
-/** How many tracks after the current one get AI marks ahead of time, so the queue shows them. */
-const SLOP_LOOKAHEAD = 25;
+/** How many tracks after the current one get AI labels ahead of time, so the queue shows them. */
+const AI_LOOKAHEAD = 25;
 
 /** Methods that load or control audio; everything else only reads or changes the queue and account. */
 export const AUDIO_METHODS =new Set<RemoteMethod>(['playSource', 'playTracks', 'playIndex', 'playPause', 'next', 'previous', 'seek']);
@@ -132,8 +132,8 @@ export interface SharedState {
   lastError?: string;
   streamInfo?: string;
   wave?: WaveSession;
-  /** Track ID (without the album) → whether slopless.art considers the track AI-generated. */
-  slop: Record<string, boolean>;
+  /** Track ID (without the album) → its AI label, for the tracks that have one (see aiMarks.ts). */
+  aiMarks: Record<string, AiMark>;
   /** Audio is unlocked in the leader window's panel. */
   audioUnlocked: boolean;
   /** Volume, 0–1, once something has set it; the fullscreen remote shows it. */
@@ -169,8 +169,8 @@ export interface CoreHost {
   log: Logger;
   /** A short message for the user, e.g. that a track was liked. */
   notice(text: string): void;
-  /** Marks AI-generated tracks; undefined while the yandexMusic.aiLabels setting is off. */
-  slop(): SlopChecker | undefined;
+  /** Finds AI labels; undefined while the yandexMusic.aiLabels setting is off. */
+  ai(): AiChecker | undefined;
   /** Keeps the chosen My Vibe settings for the next start. */
   saveWaveSettings(settings: Record<string, string>): void;
 }
@@ -290,9 +290,9 @@ export class PlayerCore {
   likedTracks: Track[] = [];
   waveOptions: WaveSetting[] = [];
   waveSettings: Record<string, string> = {};
-  slop: Record<string, boolean> = {};
-  /** Tracks being looked up on slopless.art right now. */
-  private readonly slopPending = new Set<string>();
+  aiMarks: Record<string, AiMark> = {};
+  /** Tracks whose AI labels are being looked up right now. */
+  private readonly aiPending = new Set<string>();
   /** Track whose stream has been handed to the audio output; unset while My Vibe is only preloaded. */
   loadedTrackId?: string;
 
@@ -338,7 +338,7 @@ export class PlayerCore {
       lastError: this.lastError,
       streamInfo: this.streamInfo,
       wave: this.wave && { sessionId: this.wave.sessionId, batches: [...this.wave.batches] },
-      slop: this.slop,
+      aiMarks: this.aiMarks,
       audioUnlocked: this.audioUnlocked,
       volume: this.volume,
       visuals: this.visuals,
@@ -362,7 +362,7 @@ export class PlayerCore {
     this.lastError = s.lastError;
     this.streamInfo = s.streamInfo;
     this.wave = s.wave && { sessionId: s.wave.sessionId, batches: new Map(s.wave.batches) };
-    this.slop = s.slop ?? {};
+    this.aiMarks = s.aiMarks ?? {};
     this.audioUnlocked = s.audioUnlocked;
     this.volume = s.volume;
     this.visuals = s.visuals ?? {};
@@ -538,7 +538,7 @@ export class PlayerCore {
     this.queue = [track, ...tracks];
     this.index = 0;
     this.changed();
-    this.checkSlopAround(0);
+    this.checkAiAround(0);
   }
 
   async startTrackRadio(): Promise<void> {
@@ -555,7 +555,7 @@ export class PlayerCore {
     this.queue = [track, ...tracks];
     this.index = 0;
     this.changed();
-    this.checkSlopAround(0);
+    this.checkAiAround(0);
   }
 
   /**
@@ -576,37 +576,38 @@ export class PlayerCore {
     this.index = 0;
     this.status = { playing: false, position: 0, duration: 0 };
     this.changed();
-    this.checkSlopAround(0);
+    this.checkAiAround(0);
   }
 
   /**
-   * Asks slopless.art about the tracks in the background and marks them all at once when the
+   * Looks up the tracks' AI labels in the background and shows them all at once when the
    * answers come, so a list of them redraws once rather than once per track.
    */
-  private checkSlop(tracks: Track[]): void {
-    const checker = this.host.slop();
-    const unknown = tracks.filter((t) => !(baseId(t.id) in this.slop) && !this.slopPending.has(baseId(t.id)));
+  private checkAi(tracks: Track[]): void {
+    const checker = this.host.ai();
+    // The checker caches its answers, and asks Yandex Music again only once they're old.
+    const unknown = tracks.filter((t) => !(baseId(t.id) in this.aiMarks) && !this.aiPending.has(baseId(t.id)));
     if (!checker || !unknown.length) {
       return;
     }
-    unknown.forEach((t) => this.slopPending.add(baseId(t.id)));
-    void Promise.all(unknown.map((t) => checker.isAi(t).catch(() => undefined))).then((answers) => {
-      unknown.forEach((t) => this.slopPending.delete(baseId(t.id)));
-      const found = Object.fromEntries(unknown.map((t, i) => [baseId(t.id), answers[i]]).filter(([, ai]) => ai !== undefined));
+    unknown.forEach((t) => this.aiPending.add(baseId(t.id)));
+    void Promise.all(unknown.map((t) => checker.check(t).catch(() => null))).then((marks) => {
+      unknown.forEach((t) => this.aiPending.delete(baseId(t.id)));
+      const found = Object.fromEntries(unknown.flatMap((t, i) => (marks[i] ? [[baseId(t.id), marks[i]]] : [])));
       if (Object.keys(found).length) {
-        this.slop = { ...this.slop, ...found };
+        this.aiMarks = { ...this.aiMarks, ...found };
         this.changed();
       }
     });
   }
 
-  /** The current track first, on its own, so its mark doesn't wait for the rest of the batch. */
-  private checkSlopAround(index: number): void {
+  /** The current track first, on its own, so its label doesn't wait for the rest of the batch. */
+  private checkAiAround(index: number): void {
     const track = this.queue[index];
     if (track) {
-      this.checkSlop([track]);
+      this.checkAi([track]);
     }
-    this.checkSlop(this.queue.slice(index + 1, index + 1 + SLOP_LOOKAHEAD));
+    this.checkAi(this.queue.slice(index + 1, index + 1 + AI_LOOKAHEAD));
   }
 
   private async fetchSource(source: Source): Promise<Track[]> {
@@ -711,7 +712,7 @@ export class PlayerCore {
     this.searchResults = tracks;
     this.searchStations = matchStations(stations, query);
     this.changed();
-    this.checkSlop(this.searchResults);
+    this.checkAi(this.searchResults);
     return this.searchResults;
   }
 
@@ -745,7 +746,7 @@ export class PlayerCore {
     this.streamInfo = undefined;
     this.status = { playing: false, position: 0, duration: 0, trackId: track.id };
     this.changed();
-    this.checkSlopAround(index);
+    this.checkAiAround(index);
 
     const client = await this.host.client();
     const { url, preview, codec, bitrate } = await client.streamUrl(track.id, this.host.quality());

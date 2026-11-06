@@ -53,7 +53,7 @@ const state: SharedState = {
   ...(args.has('--signed-out') ? {} : { account: { uid: 1, login: 'entro', displayName: 'Entro', hasPlus: true } }),
   accountChecked: true,
   streamInfo: 'MP3 320 kbps',
-  slop: { '1008': true, '1001': false },
+  aiMarks: { '1008': 'full', '1004': 'possible' },
   volume: 0.7,
   // Real videos, so the remote's players can be tried: a motion cover from Apple Music (HLS,
   // square), a music video on YouTube, a Yandex video shot (HEVC: plays on a Mac, not under

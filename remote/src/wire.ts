@@ -80,7 +80,8 @@ export interface SharedState {
   accountChecked: boolean;
   lastError?: string;
   streamInfo?: string;
-  slop?: Record<string, boolean>;
+  /** Track ID (without the album) → its AI label, `AiMark` in `src/aiMarks.ts`. */
+  aiMarks?: Record<string, AiMark>;
   volume?: number;
   /** Track ID (without the album) → its videos and genres, `TrackVisuals` in `src/visuals.ts`. */
   visuals?: Record<string, TrackVisuals>;
@@ -91,6 +92,9 @@ export interface SharedState {
   /** Setting ID → the seed of the chosen option; a setting left to Yandex Music is absent. */
   waveSettings?: Record<string, string>;
 }
+
+/** Yandex Music's AI label (`full`, `partial`, `possible`), or Deezer's detection. */
+export type AiMark = 'full' | 'partial' | 'possible' | 'deezer';
 
 export interface WaveSetting {
   id: string;

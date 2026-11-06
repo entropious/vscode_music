@@ -14,10 +14,10 @@ import { type ChildProcess, execFile, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
+import { AiChecker, DEEZER_AI_DATA } from './aiMarks';
 import { YandexMusicClient, artistLine, fullTitle } from './api';
 import { type AudioOutput, type Logger, PlayerCore, REMOTE_METHODS, errorText } from './core';
 import { Broadcaster, type Message, PROTOCOL, type ServiceSettings, readMessages, send, serviceBuild } from './protocol';
-import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
 import { VisualsLookup } from './visuals';
 import { loadWaveSettings, saveWaveSettings } from './waveSettingsFile';
 
@@ -171,7 +171,7 @@ class AvAudio implements AudioOutput {
   }
 }
 
-let settings: ServiceSettings = { protocol: PROTOCOL, ...BUILD, apiBaseUrl: 'https://api.music.yandex.net', quality: 'high', volume: 0.7, aiLabels: true, sloplessBaseUrl: SLOPLESS_API };
+let settings: ServiceSettings = { protocol: PROTOCOL, ...BUILD, apiBaseUrl: 'https://api.music.yandex.net', quality: 'high', volume: 0.7, aiLabels: true };
 
 /** Settings of the last window without the token, for a service started by the remote app. */
 const SETTINGS_FILE = path.join(path.dirname(logFile), 'service-settings.json');
@@ -247,8 +247,11 @@ async function loadSettings(): Promise<void> {
   audio.setVolume(settings.volume);
   log.info(`service: took the saved settings${token ? ' and token' : ', no token'}`);
 }
-// The log lies in the extension's global storage, next to the file of AI marks.
-const slopChecker = new SlopChecker(path.join(path.dirname(logFile), SLOP_FILE));
+// The log lies in the extension's global storage, next to the files of AI labels.
+const aiChecker = new AiChecker(path.dirname(logFile), async () => {
+  await loaded;
+  return new YandexMusicClient(settings.apiBaseUrl, settings.token);
+});
 const clients = new Set<net.Socket>();
 const broadcaster = new Broadcaster();
 
@@ -297,12 +300,12 @@ const core = new PlayerCore(
     quality: () => settings.quality,
     log,
     notice: (text) => notify(text),
-    slop: () => {
+    ai: () => {
       if (!settings.aiLabels) {
         return undefined;
       }
-      slopChecker.base = settings.sloplessBaseUrl;
-      return slopChecker;
+      aiChecker.options = { deezer: settings.deezerAiLabels !== false, deezerUrl: settings.deezerAiDataUrl ?? DEEZER_AI_DATA };
+      return aiChecker;
     },
     saveWaveSettings: (s) => saveWaveSettings(path.dirname(logFile), s),
   },

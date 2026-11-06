@@ -178,7 +178,12 @@
         "yandexMusic.aiLabels": {
           "type": "boolean",
           "default": true,
-          "description": "Mark tracks that are likely AI-generated. Each track is looked up on slopless.art, a public database of AI music on Yandex Music."
+          "description": "Mark AI-generated tracks: Yandex Music's own labels (\"AI use\" in the track's credits), and Deezer's detections unless yandexMusic.deezerAiLabels is off."
+        },
+        "yandexMusic.deezerAiLabels": {
+          "type": "boolean",
+          "default": true,
+          "description": "Also mark tracks that Deezer's AI detector flagged, for tracks Yandex Music hasn't labeled. Uses a snapshot from May 2026 that the Slopless project mapped to Yandex Music; it's downloaded once from GitHub (5.5 MB)."
         },
         "yandexMusic.remote.motionCovers": {
           "type": "boolean",
@@ -195,11 +200,6 @@
           "default": true,
           "description": "Fullscreen remote: show finer genres from MusicBrainz, looked up by the track's artist and title."
         },
-        "yandexMusic.sloplessBaseUrl": {
-          "type": "string",
-          "default": "https://slopless.art/api",
-          "description": "slopless.art API endpoint (change only for debugging)."
-        },
         "yandexMusic.apiBaseUrl": {
           "type": "string",
           "default": "https://api.music.yandex.net",
@@ -209,6 +209,11 @@
           "type": "string",
           "default": "https://oauth.yandex.ru",
           "description": "Yandex OAuth server endpoint. Change it only for debugging."
+        },
+        "yandexMusic.deezerAiDataUrl": {
+          "type": "string",
+          "default": "https://raw.githubusercontent.com/alexeyfv/slopless/84b6547a67b187a352a0c6fe4d056f570c7a0b5c/data/v0.2.0.json.gz",
+          "description": "Where the snapshot of Deezer's AI detections is downloaded from. Change it only for debugging."
         }
       }
     },

@@ -1,12 +1,12 @@
 import { execFile } from 'child_process';
 import * as fs from 'fs';
 import * as vscode from 'vscode';
+import { DEEZER_AI_DATA } from './aiMarks';
 import { type Station, Track, YandexMusicClient, artistLine, fullTitle } from './api';
 import { Auth } from './auth';
 import { Player } from './player';
 import { PROTOCOL, serviceBuild, socketPathFor } from './protocol';
 import { ServiceClient } from './serviceClient';
-import { SLOPLESS_API } from './slop';
 import { PlayerSync } from './sync';
 
 const REMOTE_APP = 'Yandex Music Remote.app';
@@ -50,7 +50,8 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
         quality: config().get<'high' | 'low'>('quality', 'high'),
         volume: config().get<number>('volume', 0.7),
         aiLabels: config().get<boolean>('aiLabels', true),
-        sloplessBaseUrl: config().get<string>('sloplessBaseUrl', SLOPLESS_API),
+        deezerAiLabels: config().get<boolean>('deezerAiLabels', true),
+        deezerAiDataUrl: config().get<string>('deezerAiDataUrl', DEEZER_AI_DATA),
         motionCovers: config().get<boolean>('remote.motionCovers', true),
         musicVideos: config().get<boolean>('remote.musicVideos', true),
         detailedGenres: config().get<boolean>('remote.detailedGenres', true),

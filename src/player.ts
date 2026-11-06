@@ -1,8 +1,8 @@
 import * as vscode from 'vscode';
+import { AiChecker, type AiMark, DEEZER_AI_DATA } from './aiMarks';
 import { type Account, type Playlist, type Track, type WaveSetting, YandexMusicClient, artistLine, coverUrl, fullTitle } from './api';
 import { renderCard } from './card';
 import { OutdatedWindowError } from './protocol';
-import { SLOPLESS_API, SLOP_FILE, SlopChecker } from './slop';
 import { loadWaveSettings, saveWaveSettings } from './waveSettingsFile';
 import {
   AUDIO_METHODS,
@@ -40,7 +40,7 @@ interface ViewTrack {
   cover?: string;
   available: boolean;
   liked: boolean;
-  ai: boolean;
+  ai: AiMark | null;
 }
 
 /**
@@ -89,7 +89,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
 
   constructor(extensionUri: vscode.Uri, storageUri: vscode.Uri, clientFactory: () => Promise<YandexMusicClient>) {
     this.extensionUri = extensionUri;
-    const slopChecker = new SlopChecker(vscode.Uri.joinPath(storageUri, SLOP_FILE).fsPath);
+    const aiChecker = new AiChecker(storageUri.fsPath, clientFactory);
     const webviewAudio: AudioOutput = {
       load: async (url, trackId, position) => {
         await this.ensureView();
@@ -105,13 +105,13 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
         quality: () => vscode.workspace.getConfiguration('yandexMusic').get<'high' | 'low'>('quality', 'high'),
         log: this.log,
         notice: (text) => vscode.window.setStatusBarMessage(text, 4000),
-        slop: () => {
+        ai: () => {
           const config = vscode.workspace.getConfiguration('yandexMusic');
           if (!config.get<boolean>('aiLabels', true)) {
             return undefined;
           }
-          slopChecker.base = config.get<string>('sloplessBaseUrl', SLOPLESS_API);
-          return slopChecker;
+          aiChecker.options = { deezer: config.get<boolean>('deezerAiLabels', true), deezerUrl: config.get<string>('deezerAiDataUrl', DEEZER_AI_DATA) };
+          return aiChecker;
         },
         saveWaveSettings: (settings) => saveWaveSettings(storageUri.fsPath, settings),
       },
@@ -527,7 +527,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       current: current ? this.viewTrack(current) : null,
       liked: current ? c.liked.has(baseId(current.id)) : false,
       disliked: current ? c.disliked.has(baseId(current.id)) : false,
-      ai: current ? c.slop[baseId(current.id)] === true : false,
+      ai: current ? (c.aiMarks[baseId(current.id)] ?? null) : null,
       queue: c.queue.map((t) => this.viewTrack(t)),
       index: c.index,
       source: sourceLabel(c.source),
@@ -561,7 +561,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       cover: coverUrl(t.coverUri, 200),
       available: t.available !== false,
       liked: this.core.liked.has(baseId(t.id)),
-      ai: this.core.slop[baseId(t.id)] === true,
+      ai: this.core.aiMarks[baseId(t.id)] ?? null,
     };
   }
 
@@ -580,7 +580,8 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
       this.playItem.tooltip = c.status.playing ? 'Pause' : 'Play';
       const label = `${artistLine(t)} — ${fullTitle(t)}`;
       const liked = c.liked.has(baseId(t.id));
-      const ai = c.slop[baseId(t.id)] === true ? ' $(hubot) AI' : '';
+      const mark = c.aiMarks[baseId(t.id)];
+      const ai = mark ? ` $(hubot) ${mark === 'possible' ? 'AI?' : 'AI'}` : '';
       text = `${liked ? '$(heart-filled)' : '$(music)'} ${label.length > 45 ? label.slice(0, 44) + '…' : label}${ai}`;
       [this.prevItem, this.playItem, this.nextItem].forEach((i) => i.show());
     }
@@ -638,7 +639,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
           // While the stream loads, the button stays Pause, as it will be once the track plays.
           playing: c.status.playing || (c.status.trackId === t.id && !c.status.duration),
           liked: c.liked.has(baseId(t.id)),
-          ai: c.slop[baseId(t.id)] === true,
+          ai: c.aiMarks[baseId(t.id)] ?? null,
         }),
       );
     } else {

@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import type { AiMark } from './aiMarks';
 
 /**
  * The mini player card in the status bar is drawn with SVG images: VS Code's markdown tooltip
@@ -15,8 +16,8 @@ export interface CardTrack {
   details: string[];
   playing: boolean;
   liked: boolean;
-  /** slopless.art considers the track AI-generated. */
-  ai: boolean;
+  /** The track's AI label (see aiMarks.ts). */
+  ai: AiMark | null;
 }
 
 const WIDTH = 360;
@@ -79,7 +80,7 @@ function header(t: CardTrack, p: Palette): string {
   const cover = t.cover
     ? `<image href="${t.cover}" x="0" y="0" width="${h}" height="${h}" preserveAspectRatio="xMidYMid slice" clip-path="url(#c)"/>`
     : `<rect width="${h}" height="${h}" rx="10" fill="${p.chip}"/>${icon(ICONS.note, 28, 28, 24, p.muted)}`;
-  const ai = t.ai ? `<tspan fill="${p.like}" font-weight="700">AI</tspan><tspan fill="${p.muted}"> · </tspan>` : '';
+  const ai = t.ai ? `<tspan fill="${p.like}" font-weight="700">${t.ai === 'possible' ? 'AI?' : 'AI'}</tspan><tspan fill="${p.muted}"> · </tspan>` : '';
   const source = t.source
     ? `${ai}<tspan fill="${p.accentText}" font-weight="600">${xml(t.source)}</tspan>${t.details.length ? `<tspan fill="${p.muted}"> · ${xml(t.details.join(' · '))}</tspan>` : ''}`
     : `${ai}<tspan fill="${p.muted}">${xml(t.details.join(' · '))}</tspan>`;
