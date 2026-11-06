@@ -108,6 +108,7 @@ curl -fsSL https://raw.githubusercontent.com/entropious/vscode_music/main/remote
 | `L` / `M` | Like / mute |
 | `Q` / `/` | Queue / search |
 | `F` | Leave or enter full screen |
+| `V` | Bring the background video to the front, or put it back |
 
 The remote has the same Liked list and My Vibe settings: **Liked** opens the list
 in the side panel, and the button next to **Vibe** opens the settings.
@@ -124,6 +125,11 @@ sound, in this order:
    place;
 3. the artist's background video from Yandex Music;
 4. the album's motion cover from Apple Music, in the cover's place.
+
+A video that fills the background brings up **Video** among the buttons at the
+top: it shows the whole video over the player, with only the top bar and the
+controls left, which fade out with the pointer, and puts it back in the background
+when pressed again (or with `Esc`).
 
 Next to the title, the album's genre starts that genre's radio, and finer genres
 from MusicBrainz follow it. Videos and genres are looked up only while the

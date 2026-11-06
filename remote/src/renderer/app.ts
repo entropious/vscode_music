@@ -127,7 +127,7 @@ const volLabel = el('volLabel');
 const volFill = el('volFill');
 const volTrack = el('volTrack');
 const queueBtn = el<HTMLButtonElement>('queueBtn');
-const pills = { wave: el<HTMLButtonElement>('pillVibe'), tune: el<HTMLButtonElement>('pillTune'), liked: el<HTMLButtonElement>('pillLiked') };
+const pills = { wave: el<HTMLButtonElement>('pillVibe'), tune: el<HTMLButtonElement>('pillTune'), liked: el<HTMLButtonElement>('pillLiked'), video: el<HTMLButtonElement>('pillVideo') };
 const tabs: Record<TabWithButton, HTMLButtonElement> = { queue: el('tabQueue'), liked: el('tabLiked'), playlists: el('tabPlaylists'), search: el('tabSearch') };
 const panes: Record<Tab, HTMLElement> = { queue: el('queuePane'), liked: el('likedPane'), playlists: el('playlistsPane'), search: el('searchPane'), vibe: el('vibePane') };
 const query = el<HTMLInputElement>('query');
@@ -142,7 +142,23 @@ const overlay = el('overlay');
 const stillPictures = window.matchMedia('(prefers-reduced-motion: reduce)');
 const videos = new VideoStage(el('bgVideo'), el('tileVideo'), (place) => {
   root.dataset['video'] = place ?? '';
+  // Only a video that fills the background can come to the front; it goes back when it goes away.
+  setHidden(pills.video, place !== 'background');
+  if (place !== 'background') {
+    videoInFront(false);
+  }
 });
+
+/** Brings the background video to the front, over the whole player, or puts it back. */
+function videoInFront(front: boolean): void {
+  const on = front && root.dataset['video'] === 'background';
+  root.classList.toggle('video-front', on);
+  pills.video.setAttribute('aria-pressed', String(on));
+  pills.video.title = on ? 'Back to the player' : 'Show the video';
+  if (on) {
+    openDrawer(false);
+  }
+}
 
 const barEls: HTMLElement[] = [];
 for (let i = 0; i < BARS; i++) {
@@ -850,6 +866,7 @@ pills.tune.addEventListener('click', () => openDrawer(!(drawerOpen && tab === 'v
 // Like the My Vibe settings button, a second click closes the drawer it opened.
 pills.liked.addEventListener('click', () => (drawerOpen && tab === 'liked' ? openDrawer(false) : showLiked()));
 queueBtn.addEventListener('click', () => openDrawer(!drawerOpen));
+pills.video.addEventListener('click', () => videoInFront(!root.classList.contains('video-front')));
 el('closeDrawer').addEventListener('click', () => openDrawer(false));
 for (const k of Object.keys(tabs) as TabWithButton[]) {
   tabs[k].addEventListener('click', () => (k === 'liked' ? showLiked() : openDrawer(true, k)));
@@ -915,6 +932,8 @@ document.addEventListener('keydown', (e) => {
       query.blur();
     } else if (drawerOpen) {
       openDrawer(false);
+    } else if (root.classList.contains('video-front')) {
+      videoInFront(false);
     } else {
       window.ym.leaveFullScreen();
     }
@@ -934,6 +953,7 @@ document.addEventListener('keydown', (e) => {
     q: () => openDrawer(!drawerOpen || tab !== 'queue', 'queue'),
     '/': () => openDrawer(true, 'search'),
     f: () => window.ym.toggleFullScreen(),
+    v: () => videoInFront(!root.classList.contains('video-front')),
   };
   const act = action[e.key];
   if (act) {
