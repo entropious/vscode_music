@@ -2,6 +2,7 @@ import { createHash } from 'crypto';
 import * as fs from 'fs';
 import * as http from 'http';
 import { AddressInfo } from 'net';
+import { gzipSync } from 'zlib';
 
 const SIGN_SALT = 'XGRlBW9FXlekgbPrRHuSiA';
 export const MOCK_TOKEN = 'test-token';
@@ -77,12 +78,18 @@ export async function startMockServer(mp3Path: string) {
         return json({ result: { tracks: { results: tracks.filter((t) => t.title.includes(url.searchParams.get('text') ?? '') || true) } } });
       }
       let m: RegExpMatchArray | null;
-      // slopless.art: Test Track 2 is AI-generated, everything else isn't.
-      if ((m = p.match(/^\/slopless\/track\/(\d+)$/))) {
-        return json({ id: Number(m[1]), score: m[1] === '1002' ? 0.93 : -1, scoreYandex: null });
+      // Yandex Music's AI label in the credits: Test Track 2 may have been made with AI.
+      if ((m = p.match(/^\/tracks\/(\d+)\/credits$/))) {
+        const credits = [{ title: 'Исполнитель', value: 'Test Artist' }];
+        if (m[1] === '1002') {
+          credits.push({ title: 'Использование ИИ', value: 'Возможно, трек создан с использованием ИИ' });
+        }
+        return json({ result: { credits } });
       }
-      if ((m = p.match(/^\/slopless\/artist\/(\d+)$/))) {
-        return json({ id: Number(m[1]), aiTracks: 0, totalTracks: 5, yandexAiTracks: 0, yandexCheckedTracks: 5 });
+      // Deezer's detections, as the Slopless snapshot has them: Test Track 3's album.
+      if (p === '/deezer-ai.json.gz') {
+        res.writeHead(200, { 'Content-Type': 'application/gzip' });
+        return res.end(gzipSync(JSON.stringify({ deezer: { tracks: [], albums: [503], artists: [], artists_100: [] }, slopless: [] })));
       }
       if ((m = p.match(/^\/tracks\/(\d+)\/download-info$/))) {
         return json({

@@ -352,6 +352,12 @@ export class YandexMusicClient {
     return r?.backgroundVideoUrl ?? r?.artist?.backgroundVideoUrl ?? undefined;
   }
 
+  /** The track's credits as "About the track" lists them: performer, authors, label, and Yandex's AI label ("AI use"). */
+  async trackCredits(trackId: string): Promise<{ title: string; value: string }[]> {
+    const r = await this.request<any>(`/tracks/${trackId.split(':')[0]}/credits`);
+    return (Array.isArray(r?.credits) ? r.credits : []).map((c: any) => ({ title: String(c?.title ?? ''), value: String(c?.value ?? '') }));
+  }
+
   /** Returns a direct stream link for the track, preferring MP3 over other codecs. */
   async streamUrl(trackId: string, quality: 'high' | 'low' = 'high'): Promise<{ url: string; preview: boolean; codec: string; bitrate: number }> {
     const id = trackId.split(':')[0];

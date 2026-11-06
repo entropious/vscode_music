@@ -1,6 +1,7 @@
 import * as assert from 'assert';
 import * as path from 'path';
 import * as vscode from 'vscode';
+import { markOf } from '../../aiMarks';
 import type { ExtensionApi } from '../../extension';
 import { MOCK_TOKEN, startMockServer } from '../mockServer';
 import { status, waitFor } from './helpers';
@@ -22,7 +23,7 @@ suite('Yandex Music: logic against the mock API', function () {
     }
     server = await startMockServer(path.join(fixtures, 'tone.mp3'));
     await vscode.workspace.getConfiguration('yandexMusic').update('apiBaseUrl', server.base, vscode.ConfigurationTarget.Global);
-    await vscode.workspace.getConfiguration('yandexMusic').update('sloplessBaseUrl', `${server.base}/slopless`, vscode.ConfigurationTarget.Global);
+    await vscode.workspace.getConfiguration('yandexMusic').update('deezerAiDataUrl', `${server.base}/deezer-ai.json.gz`, vscode.ConfigurationTarget.Global);
     // On macOS the tone plays through the speakers, not a muted webview.
     await vscode.workspace.getConfiguration('yandexMusic').update('volume', 0, vscode.ConfigurationTarget.Global);
     await vscode.extensions.getExtension('entro.vscode-yandex-music')!.activate();
@@ -71,11 +72,20 @@ suite('Yandex Music: logic against the mock API', function () {
     assert.ok(server.log.some((l) => l.startsWith('GET /get-mp3/')), 'the MP3 must be downloaded via the signed link');
   });
 
-  test('tracks further down the queue get their AI marks before they play', async () => {
+  test('tracks further down the queue get their AI labels before they play: Yandex Music\'s, then Deezer\'s', async () => {
     const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
-    await waitFor('the AI mark for Test Track 2', async () => api.player.core.slop['1002'] === true);
-    assert.strictEqual(api.player.core.slop['1003'], false);
+    await waitFor("Yandex Music's label of Test Track 2", async () => api.player.core.aiMarks['1002'] === 'possible');
+    await waitFor("Deezer's detection of Test Track 3's album", async () => api.player.core.aiMarks['1003'] === 'deezer');
+    assert.strictEqual(api.player.core.aiMarks['1001'], undefined, 'Test Track 1 has no label');
     assert.strictEqual((await status()).index, 0);
+  });
+
+  test("Yandex Music's AI label is read from what the credit says", () => {
+    assert.strictEqual(markOf('Возможно, трек создан с использованием ИИ'), 'possible');
+    assert.strictEqual(markOf('The track may have been created with the help of AI'), 'possible');
+    assert.strictEqual(markOf('Трек частично создан с использованием ИИ'), 'partial');
+    assert.strictEqual(markOf('Трек полностью создан с помощью ИИ'), 'full');
+    assert.strictEqual(markOf('Something new'), 'possible', 'a wording not seen yet counts as possible');
   });
 
   test('on macOS the music plays in the background service, not in the window', async function () {
@@ -113,10 +123,10 @@ suite('Yandex Music: logic against the mock API', function () {
     assert.ok(!server.liked.has(1002));
   });
 
-  test('the playing track is marked as AI-generated when slopless.art says so, and nothing else happens to it', async () => {
+  test('the playing track is marked as AI-generated when Yandex Music labels it, and nothing else happens to it', async () => {
     const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
-    await waitFor('the AI mark for Test Track 2', async () => api.player.core.slop['1002'] === true);
-    assert.strictEqual(api.player.core.slop['1001'], false, 'Test Track 1 is not AI');
+    await waitFor('the AI label of Test Track 2', async () => api.player.core.aiMarks['1002'] === 'possible');
+    assert.strictEqual(api.player.core.aiMarks['1001'], undefined, 'Test Track 1 has no label');
     const s = await status();
     assert.strictEqual(s.index, 1, 'the AI track keeps playing');
     assert.ok(!server.liked.has(1002) && !server.disliked.has(1002), 'the AI track is not disliked or liked');
@@ -166,9 +176,15 @@ suite('Yandex Music: logic against the mock API', function () {
   test('track radio keeps the current track playing and queues similar music after it', async () => {
     const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
     const before = await status();
-    const id = api.player.core.current()!.id.split(':')[0];
-    // The previous test leaves this track loading: its stream is requested a moment later.
-    await waitFor("the current track's stream", async () => server.log.some((l) => l.startsWith('GET /get-mp3/') && l.endsWith(`/${id}.mp3`)));
+    const current = api.player.core.current()!;
+    const id = current.id.split(':')[0];
+    // The previous test leaves this track loading: the webview requests its stream a moment
+    // later, and knows the track's length only once it has. (The log can't tell: the track
+    // has been played, and its stream requested, before.)
+    await waitFor("the current track's stream", async () => {
+      const s = await status();
+      return s.trackId === current.id && s.duration > 0;
+    });
     const streams = server.log.filter((l) => l.startsWith('GET /get-mp3/')).length;
     await vscode.commands.executeCommand('yandexMusic.trackRadio');
     const s = await status();
