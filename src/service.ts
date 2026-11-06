@@ -175,10 +175,15 @@ let settings: ServiceSettings = { protocol: PROTOCOL, ...BUILD, apiBaseUrl: 'htt
 
 /** Settings of the last window without the token, for a service started by the remote app. */
 const SETTINGS_FILE = path.join(path.dirname(logFile), 'service-settings.json');
-/** The token's item in the login keychain, written and read by /usr/bin/security, which may then read it without asking. */
-const KEYCHAIN = ['-s', 'vscode-yandex-music', '-a', 'token'];
+/**
+ * The token's item in the login keychain, written and read by /usr/bin/security, which may then
+ * read it without asking. Each VS Code profile has its own, named after its service's socket, so a
+ * service of another profile, such as the tests', never overwrites this one's token.
+ */
+const KEYCHAIN_ACCOUNT = `token-${path.basename(socketPath ?? '').match(/[0-9a-f]{12}/)?.[0] ?? 'default'}`;
+const KEYCHAIN = ['-s', 'vscode-yandex-music', '-a', KEYCHAIN_ACCOUNT];
 /** The Genius API token's item, kept the same way. */
-const GENIUS_KEYCHAIN = ['-s', 'vscode-yandex-music-genius', '-a', 'token'];
+const GENIUS_KEYCHAIN = ['-s', 'vscode-yandex-music-genius', '-a', KEYCHAIN_ACCOUNT];
 /** What was last saved, so a window's repeated hello doesn't write it again. */
 let savedSettings: string | undefined;
 let savedToken: string | undefined;

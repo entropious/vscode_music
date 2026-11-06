@@ -83,8 +83,9 @@ at from its global storage folder, and runs the extension's `out/service.js`
 with its own Electron in Node mode. Such a service has no window to say hello,
 so on every hello the service saves the window's settings to
 `service-settings.json` in the global storage and the token to the login
-keychain (`security`, item `vscode-yandex-music`), and reads both when it
-starts. `YM_EXTENSION_DIR` and `YM_STORAGE_DIR` point the app at another copy,
+keychain (`security`, item `vscode-yandex-music`, account `token-<socket id>`:
+one per VS Code profile, so the tests' service, with a profile of its own, never
+overwrites the user's token), and reads both when it starts. `YM_EXTENSION_DIR` and `YM_STORAGE_DIR` point the app at another copy,
 e.g. this repository after `npm run compile`.
 
 The service looks up the visuals of the current and the next track
@@ -100,7 +101,9 @@ visible and stops when it is minimized or hidden; attaching alone asks for nothi
   title; from Wikidata and Genius, the music video's YouTube ID, checked with
   YouTube's oEmbed;
 - from Apple Music, the motion cover: the album on the iTunes Search API, then
-  the HLS playlists linked on its music.apple.com page, of which the square one.
+  the HLS playlists linked on its music.apple.com page, of which the square one;
+  and the artist's video for artists Yandex Music has none of: the artist's page,
+  of which the wide one.
 
 The remote plays one of them (`remote/src/renderer/visuals.ts`): an MP4 or an
 HLS stream through hls.js's light build, or YouTube's embedded player, which
