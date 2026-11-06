@@ -142,23 +142,15 @@ the remote plays no videos.
 
 ## AI-generated music
 
-AI-generated tracks get a mark in the player panel, the queue and search
-results, the status bar, the mini player and the fullscreen remote. The
-extension doesn't skip or dislike them; it only shows the mark. Hover over it to
-see who says so:
-
-- **AI** or **AI?** — Yandex Music's own label, shown in its "About the track"
-  card: the rights holder says the track was made fully or partly with AI, or
-  Yandex's detector found it was possibly made with AI (**AI?**).
-- **AI** for a track Yandex hasn't labeled — Deezer's AI detector flagged the
-  track, its album or its artist. This comes from a snapshot of Deezer's
-  detections that the [Slopless](https://github.com/alexeyfv/slopless) project
-  matched to Yandex Music (May 2026, MIT); it is downloaded once from GitHub
-  (5.5 MB). Turn it off with `yandexMusic.deezerAiLabels`.
-
-No mark means only that neither has labeled the track. The playing track, the
-next ones in the queue and search results are looked up; turn all of this off
-with `yandexMusic.aiLabels`.
+Tracks that Yandex Music labels as AI-generated get a mark in the player panel,
+the queue and search results, the status bar, the mini player and the fullscreen
+remote. The extension doesn't skip or dislike them; it only shows the mark. The
+label is Yandex Music's own, the one in its "About the track" card: **AI** when
+the rights holder says the track was made fully or partly with AI, **AI?** when
+Yandex's detector found it was possibly made with AI. Hover over the mark for
+which. No mark means only that Yandex hasn't labeled the track. The playing
+track, the next ones in the queue and search results are looked up; turn this
+off with `yandexMusic.aiLabels`.
 
 ## Settings
 
@@ -166,8 +158,7 @@ with `yandexMusic.aiLabels`.
 |---|---|---|
 | `yandexMusic.quality` | `high` | `high` picks the highest MP3 bitrate available, `low` the lowest. |
 | `yandexMusic.volume` | `0.7` | Volume, 0–1. |
-| `yandexMusic.aiLabels` | `true` | Mark AI-generated tracks: Yandex Music's labels and Deezer's detections. |
-| `yandexMusic.deezerAiLabels` | `true` | Also mark tracks Deezer's detector flagged and Yandex hasn't labeled. |
+| `yandexMusic.aiLabels` | `true` | Mark tracks that Yandex Music labels as AI-generated. |
 | `yandexMusic.remote.musicVideos` | `true` | Fullscreen remote: music videos, silent, from the iTunes Store and YouTube via Wikidata and Genius. |
 | `yandexMusic.remote.motionCovers` | `true` | Fullscreen remote: Apple Music's motion covers for tracks without a video. |
 | `yandexMusic.remote.detailedGenres` | `true` | Fullscreen remote: finer genres from MusicBrainz. |

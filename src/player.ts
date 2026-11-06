@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AiChecker, type AiMark, DEEZER_AI_DATA } from './aiMarks';
+import { AiChecker, type AiMark } from './aiMarks';
 import { type Account, type Playlist, type Track, type WaveSetting, YandexMusicClient, artistLine, coverUrl, fullTitle } from './api';
 import { renderCard } from './card';
 import { OutdatedWindowError } from './protocol';
@@ -105,14 +105,7 @@ export class Player implements vscode.WebviewViewProvider, vscode.Disposable {
         quality: () => vscode.workspace.getConfiguration('yandexMusic').get<'high' | 'low'>('quality', 'high'),
         log: this.log,
         notice: (text) => vscode.window.setStatusBarMessage(text, 4000),
-        ai: () => {
-          const config = vscode.workspace.getConfiguration('yandexMusic');
-          if (!config.get<boolean>('aiLabels', true)) {
-            return undefined;
-          }
-          aiChecker.options = { deezer: config.get<boolean>('deezerAiLabels', true), deezerUrl: config.get<string>('deezerAiDataUrl', DEEZER_AI_DATA) };
-          return aiChecker;
-        },
+        ai: () => (vscode.workspace.getConfiguration('yandexMusic').get<boolean>('aiLabels', true) ? aiChecker : undefined),
         saveWaveSettings: (settings) => saveWaveSettings(storageUri.fsPath, settings),
       },
       webviewAudio,

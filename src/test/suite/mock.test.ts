@@ -23,7 +23,6 @@ suite('Yandex Music: logic against the mock API', function () {
     }
     server = await startMockServer(path.join(fixtures, 'tone.mp3'));
     await vscode.workspace.getConfiguration('yandexMusic').update('apiBaseUrl', server.base, vscode.ConfigurationTarget.Global);
-    await vscode.workspace.getConfiguration('yandexMusic').update('deezerAiDataUrl', `${server.base}/deezer-ai.json.gz`, vscode.ConfigurationTarget.Global);
     // On macOS the tone plays through the speakers, not a muted webview.
     await vscode.workspace.getConfiguration('yandexMusic').update('volume', 0, vscode.ConfigurationTarget.Global);
     await vscode.extensions.getExtension('entro.vscode-yandex-music')!.activate();
@@ -72,10 +71,10 @@ suite('Yandex Music: logic against the mock API', function () {
     assert.ok(server.log.some((l) => l.startsWith('GET /get-mp3/')), 'the MP3 must be downloaded via the signed link');
   });
 
-  test('tracks further down the queue get their AI labels before they play: Yandex Music\'s, then Deezer\'s', async () => {
+  test("tracks further down the queue get Yandex Music's AI labels before they play", async () => {
     const api = vscode.extensions.getExtension<ExtensionApi>('entro.vscode-yandex-music')!.exports;
     await waitFor("Yandex Music's label of Test Track 2", async () => api.player.core.aiMarks['1002'] === 'possible');
-    await waitFor("Deezer's detection of Test Track 3's album", async () => api.player.core.aiMarks['1003'] === 'deezer');
+    assert.strictEqual(api.player.core.aiMarks['1003'], undefined, 'Test Track 3 has no label');
     assert.strictEqual(api.player.core.aiMarks['1001'], undefined, 'Test Track 1 has no label');
     assert.strictEqual((await status()).index, 0);
   });

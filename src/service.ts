@@ -14,7 +14,7 @@ import { type ChildProcess, execFile, spawn } from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
 import * as path from 'path';
-import { AiChecker, DEEZER_AI_DATA } from './aiMarks';
+import { AiChecker } from './aiMarks';
 import { YandexMusicClient, artistLine, fullTitle } from './api';
 import { type AudioOutput, type Logger, PlayerCore, REMOTE_METHODS, errorText } from './core';
 import { Broadcaster, type Message, PROTOCOL, type ServiceSettings, readMessages, send, serviceBuild } from './protocol';
@@ -247,7 +247,7 @@ async function loadSettings(): Promise<void> {
   audio.setVolume(settings.volume);
   log.info(`service: took the saved settings${token ? ' and token' : ', no token'}`);
 }
-// The log lies in the extension's global storage, next to the files of AI labels.
+// The log lies in the extension's global storage, next to the file of AI labels.
 const aiChecker = new AiChecker(path.dirname(logFile), async () => {
   await loaded;
   return new YandexMusicClient(settings.apiBaseUrl, settings.token);
@@ -300,13 +300,7 @@ const core = new PlayerCore(
     quality: () => settings.quality,
     log,
     notice: (text) => notify(text),
-    ai: () => {
-      if (!settings.aiLabels) {
-        return undefined;
-      }
-      aiChecker.options = { deezer: settings.deezerAiLabels !== false, deezerUrl: settings.deezerAiDataUrl ?? DEEZER_AI_DATA };
-      return aiChecker;
-    },
+    ai: () => (settings.aiLabels ? aiChecker : undefined),
     saveWaveSettings: (s) => saveWaveSettings(path.dirname(logFile), s),
   },
   audio,
