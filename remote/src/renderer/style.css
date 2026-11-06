@@ -69,15 +69,14 @@ button:focus-visible, .bars:focus-visible { outline: 3px solid var(--accent); ou
 .bg-video { position: absolute; inset: 0; overflow: hidden; }
 .bg-video .visual { position: absolute; left: 50%; top: 50%; width: max(100vw, 177.78vh); height: max(100vh, 56.25vw); transform: translate(-50%, -50%); border: 0; object-fit: cover; opacity: 0; transition: opacity .8s ease; pointer-events: none; }
 .bg-video .visual.shown { opacity: .85; }
-/* The video in front: all of it over black, and of the player only the top bar and the controls,
-   which fade out with the pointer and come back when it moves. */
+/* The video in front: all of it over black, with the whole player over it on the vignette; the
+   player and the vignette fade out together with the pointer and come back when it moves. */
 .video-front { background: #000; }
-.video-front .bg > :not(.bg-video), .video-front .shell { visibility: hidden; }
+.video-front .bg > :not(.bg-video, .vignette) { visibility: hidden; }
 .video-front .bg-video .visual { width: min(100vw, 177.78vh); height: min(100vh, 56.25vw); object-fit: contain; }
 .video-front .bg-video .visual.shown { opacity: 1; }
-.video-front .top { background: linear-gradient(rgba(6, 7, 10, .65), rgba(6, 7, 10, 0)); }
-.video-front :is(.top, .dock) { visibility: visible; transition: opacity .4s; }
-.video-front.idle :is(.top, .dock) { opacity: 0; }
+.video-front :is(.shell, .vignette) { transition: opacity .4s; }
+.video-front.idle :is(.shell, .vignette) { opacity: 0; }
 .vignette { position: absolute; inset: 0; background: radial-gradient(ellipse 80% 70% at 35% 45%, rgba(6, 7, 10, .15) 0%, rgba(6, 7, 10, .62) 100%), linear-gradient(180deg, rgba(6, 7, 10, .38) 0%, rgba(6, 7, 10, .18) 35%, rgba(6, 7, 10, .72) 100%); }
 
 .shell { position: relative; z-index: 1; height: 100%; display: flex; flex-direction: column; overflow-y: auto; overflow-x: hidden; }

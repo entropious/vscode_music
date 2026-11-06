@@ -128,9 +128,9 @@ sound, in this order:
 4. the album's motion cover from Apple Music, in the cover's place.
 
 A video that fills the background brings up **Video** among the buttons at the
-top: it shows the whole video over the player, with only the top bar and the
-controls left, which fade out with the pointer, and puts it back in the background
-when pressed again (or with `Esc`). The choice stays: while it is on, every next
+top: it shows the whole video, not dimmed, with the player over it, which fades
+out with the pointer, and puts it back in the background when pressed again (or
+with `Esc`). The choice stays: while it is on, every next
 video comes to the front at once, also after the app is restarted.
 
 Next to the title, the album's genre starts that genre's radio. Videos and the
