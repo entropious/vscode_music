@@ -22,37 +22,56 @@ struct RootView: View {
     @State private var recordHold: Task<Void, Never>?
 
     var body: some View {
-        GeometryReader { g in
-            let m = Metrics(width: g.size.width, height: g.size.height, drawerOpen: model.drawerOpen)
+        GeometryReader { geometry in
+            let metrics = Metrics(
+                width: geometry.size.width,
+                height: geometry.size.height,
+                drawerOpen: model.drawerOpen
+            )
             let front = model.showsVideoInFront
             ZStack(alignment: .topLeading) {
                 BackgroundView(palette: palette, blurred: blurred, idle: idle)
                 VStack(spacing: 0) {
-                    TopBar(frames: frames, metrics: m)
+                    TopBar(frames: frames, metrics: metrics)
                     VStack(spacing: 16) {
-                        HStack(spacing: m.nowGap) {
-                            ArtView(size: m.cover, palette: palette, cover: cover, label: label, recordOut: recordOut)
+                        HStack(spacing: metrics.nowGap) {
+                            ArtView(
+                                size: metrics.cover,
+                                palette: palette,
+                                cover: cover,
+                                label: label,
+                                recordOut: recordOut
+                            )
                                 .id(model.current?.id)
-                                .transition(.asymmetric(insertion: .offset(y: 28).combined(with: .scale(scale: 0.96)), removal: .identity))
-                            InfoView(metrics: m)
+                                .transition(
+                                    .asymmetric(
+                                        insertion: .offset(y: 28).combined(with: .scale(scale: 0.96)),
+                                        removal: .identity
+                                    )
+                                )
+                            InfoView(metrics: metrics)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        DockView(metrics: m)
+                        DockView(metrics: metrics)
                     }
-                    .padding(.horizontal, m.gutter)
-                    .padding(.bottom, m.bottom)
-                    .padding(.trailing, model.drawerOpen ? m.drawer + 8 : 0)
+                    .padding(.horizontal, metrics.gutter)
+                    .padding(.bottom, metrics.bottom)
+                    .padding(.trailing, model.drawerOpen ? metrics.drawer + 8 : 0)
                 }
                 .opacity(front && idle ? 0 : 1)
                 .animation(.easeInOut(duration: 0.4), value: idle)
                 if model.drawerOpen {
                     DrawerView()
-                        .frame(width: min(m.drawer, g.size.width - 24))
+                        .frame(width: min(metrics.drawer, geometry.size.width - 24))
                         .padding(.top, 96)
-                        .padding(.trailing, m.drawerInset)
-                        .padding(.bottom, m.drawerInset)
+                        .padding(.trailing, metrics.drawerInset)
+                        .padding(.bottom, metrics.drawerInset)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.drawer = $0 }
+                        .onGeometryChange(for: CGRect.self) {
+                            $0.frame(in: .global)
+                        } action: {
+                            frames.drawer = $0
+                        }
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
                 ToastView()
@@ -71,25 +90,29 @@ struct RootView: View {
 
     /// The cover, the record's label, the blurred background and the palette of a track. The
     /// previous ones stay until the new ones are in.
-    private func loadArt(_ t: Track?) async {
+    private func loadArt(_ track: Track?) async {
         let store = ImageStore.shared
-        guard let t, let big = t.cover(800), let small = t.cover(200), let bg = t.cover(400) else {
+        guard let track,
+            let coverLink = track.cover(800),
+            let labelLink = track.cover(200),
+            let backgroundLink = track.cover(400)
+        else {
             cover = nil
             label = nil
             blurred = nil
             palette = .standard
             return
         }
-        if let c = store.cached(big) { cover = c }
-        async let bigImage = store.load(big)
-        async let smallImage = store.load(small)
-        async let bgImage = store.load(bg)
-        if let s = await smallImage {
-            label = s
-            palette = paletteOf(s)
+        if let cached = store.cached(coverLink) { cover = cached }
+        async let coverImage = store.load(coverLink)
+        async let labelImage = store.load(labelLink)
+        async let backgroundImage = store.load(backgroundLink)
+        if let loadedLabel = await labelImage {
+            label = loadedLabel
+            palette = paletteOf(loadedLabel)
         }
-        if let b = await bgImage { blurred = blurredOf(b) }
-        cover = await bigImage
+        if let loadedBackground = await backgroundImage { blurred = blurredOf(loadedBackground) }
+        cover = await coverImage
     }
 
     /// The record slides out while music plays and stays out for a moment after it stops, as it
@@ -125,26 +148,33 @@ struct TopBar: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             pills
             HStack(spacing: 12) {
-                Button { model.openDrawer(!model.drawerOpen) } label: {
+                Button {
+                    model.openDrawer(!model.drawerOpen)
+                } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "line.3.horizontal").font(.system(size: 22, weight: .medium))
                         Text("Queue").font(Fonts.sans(20, .semibold))
                     }
                     .padding(.horizontal, 24)
                     .frame(height: 64)
-                    .chip(RoundedRectangle(cornerRadius: 20), base: model.drawerOpen ? Color.accent.opacity(0.18) : .white.opacity(0.08), hover: .white.opacity(0.14),
-                          border: model.drawerOpen ? .accent : .white.opacity(0.16))
+                    .chip(
+                        RoundedRectangle(cornerRadius: 20),
+                        base: model.drawerOpen ? Color.accent.opacity(0.18) : .white.opacity(0.08),
+                        hover: .white.opacity(0.14),
+                        border: model.drawerOpen ? .accent : .white.opacity(0.16)
+                    )
                 }
                 .buttonStyle(PressStyle())
                 .opener("queue", frames)
-                if let acc = model.state?.account {
-                    let name = (acc.displayName?.isEmpty == false ? acc.displayName! : acc.login).trimmingCharacters(in: .whitespaces)
+                if let account = model.state?.account {
+                    let shownName = account.displayName?.isEmpty == false ? account.displayName! : account.login
+                    let name = shownName.trimmingCharacters(in: .whitespaces)
                     Text(name.prefix(1).uppercased())
                         .font(Fonts.sans(21, .semibold))
                         .frame(width: 52, height: 52)
                         .background(.white.opacity(0.14), in: Circle())
                         .overlay(Circle().stroke(.white.opacity(0.2), lineWidth: 1))
-                        .help(acc.login)
+                        .help(account.login)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
@@ -180,7 +210,8 @@ struct TopBar: View {
                         .background(tuneOpen ? (waveOn ? Color.ink.opacity(0.14) : Color.accent.opacity(0.18)) : .clear)
                         .overlay(alignment: .topTrailing) {
                             if model.waveTuned {
-                                Circle().fill(waveOn ? Color.ink : .accent).frame(width: 9, height: 9).padding(.top, 9).padding(.trailing, 11)
+                                Circle().fill(waveOn ? Color.ink : .accent).frame(width: 9, height: 9).padding(.top, 9)
+                                    .padding(.trailing, 11)
                             }
                         }
                         .contentShape(Rectangle())
@@ -208,7 +239,9 @@ struct TopBar: View {
         .overlay(Capsule().stroke(.white.opacity(0.12), lineWidth: 1))
     }
 
-    private func pill(_ title: String, on: Bool, action: @escaping () -> Void, @ViewBuilder icon: () -> some View) -> some View {
+    private func pill(_ title: String, on: Bool, action: @escaping () -> Void, @ViewBuilder icon: () -> some View)
+        -> some View
+    {
         Button(action: action) {
             HStack(spacing: 10) {
                 icon()
@@ -226,7 +259,11 @@ struct TopBar: View {
 extension View {
     /// Remembers where a button that opens the drawer is, so a click on it isn't taken for one outside.
     func opener(_ name: String, _ frames: Frames) -> some View {
-        onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frames.openers[name] = $0 }
+        onGeometryChange(for: CGRect.self) {
+            $0.frame(in: .global)
+        } action: {
+            frames.openers[name] = $0
+        }
     }
 }
 
@@ -261,8 +298,16 @@ struct ToastView: View {
                     .padding(.horizontal, 28)
                     .frame(maxWidth: 720)
                     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 22))
-                    .background(Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.78), in: RoundedRectangle(cornerRadius: 22))
-                    .overlay(RoundedRectangle(cornerRadius: 22).stroke(toast.error ? Color.ai.opacity(0.6) : .white.opacity(0.14), lineWidth: 1))
+                    .background(
+                        Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.78),
+                        in: RoundedRectangle(cornerRadius: 22)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 22).stroke(
+                            toast.error ? Color.ai.opacity(0.6) : .white.opacity(0.14),
+                            lineWidth: 1
+                        )
+                    )
                     .shadow(color: .black.opacity(0.4), radius: 25, y: 20)
                     .id(toast.id)
                     .transition(.opacity.combined(with: .offset(y: -12)))
@@ -286,9 +331,9 @@ struct OverlayView: View {
             VStack(spacing: 20) {
                 if let glyph = resourceImage("glyph.svg") {
                     TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
-                        let t = context.date.timeIntervalSinceReferenceDate
+                        let time = context.date.timeIntervalSinceReferenceDate
                         Image(nsImage: glyph).resizable().frame(width: 120, height: 120)
-                            .scaleEffect(1 + 0.0125 * (1 - cos(t / 3.6 * 2 * .pi)))
+                            .scaleEffect(1 + 0.0125 * (1 - cos(time / 3.6 * 2 * .pi)))
                     }
                 }
                 Text(title).font(Fonts.sans(44, .bold)).tracking(-0.9).padding(.top, 12)

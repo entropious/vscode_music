@@ -32,12 +32,10 @@ private struct Incoming: Decodable {
     let text: String?
 }
 
-/**
- * Keeps the app attached to the player service: finds its socket, attaches as a remote, passes
- * on what the service broadcasts and runs calls there. When no service is running, it starts the
- * one of the installed extension; when the service exits (the extension was updated), it looks
- * for the next one. Everything runs on the main queue.
- */
+/// Keeps the app attached to the player service: finds its socket, attaches as a remote, passes
+/// on what the service broadcasts and runs calls there. When no service is running, it starts the
+/// one of the installed extension; when the service exits (the extension was updated), it looks
+/// for the next one. Everything runs on the main queue.
 @MainActor
 final class ServiceLink {
     private static let retry: TimeInterval = 1.5
@@ -48,6 +46,7 @@ final class ServiceLink {
     private static let launchWait: TimeInterval = 8
     /// A service that answers `attach` with silence predates remotes other than windows.
     private static let welcomeWait: TimeInterval = 2.5
+    private static let socketPrefix = "vscode-yandex-music-service-"
 
     var onLink: (LinkState) -> Void = { _ in }
     var onState: (SharedState, JSON) -> Void = { _, _ in }
@@ -55,8 +54,9 @@ final class ServiceLink {
     var onNotice: (String) -> Void = { _ in }
 
     private(set) var state: LinkState = .starting
-    private var fd: Int32 = -1
-    private var source: DispatchSourceRead?
+    /// The connected socket's file descriptor, -1 when there is none.
+    private var descriptor: Int32 = -1
+    private var reader: DispatchSourceRead?
     private var buffer = Data()
     private var nextId = 1
     private var pending: [Int: CheckedContinuation<JSON?, Error>] = [:]
@@ -80,7 +80,9 @@ final class ServiceLink {
 
     @discardableResult
     func call(_ method: String, _ args: [JSON] = []) async throws -> JSON? {
-        guard fd >= 0, state == .connected else { throw ServiceError(message: "The player is not running.") }
+        guard descriptor >= 0, state == .connected else {
+            throw ServiceError(message: "The player is not running.")
+        }
         let id = nextId
         nextId += 1
         return try await withCheckedThrowingContinuation { continuation in
@@ -89,10 +91,10 @@ final class ServiceLink {
         }
     }
 
-    private func setLink(_ s: LinkState) {
-        if s != state {
-            state = s
-            onLink(s)
+    private func setLink(_ newState: LinkState) {
+        if newState != state {
+            state = newState
+            onLink(newState)
         }
     }
 
@@ -100,23 +102,31 @@ final class ServiceLink {
         retryWork?.cancel()
         let work = DispatchWorkItem { [weak self] in self?.attach() }
         retryWork = work
-        DispatchQueue.main.asyncAfter(deadline: .now() + (state == .outdated ? Self.outdatedRetry : Self.retry), execute: work)
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + (state == .outdated ? Self.outdatedRetry : Self.retry),
+            execute: work
+        )
     }
 
     /// Sockets of running services, the most recently started first.
     private func serviceSockets() -> [String] {
         let dir = NSTemporaryDirectory()
-        let fm = FileManager.default
-        guard let names = try? fm.contentsOfDirectory(atPath: dir) else { return [] }
-        let sockets = names.filter { $0.hasPrefix("vscode-yandex-music-service-") && $0.hasSuffix(".sock") && $0.count == "vscode-yandex-music-service-".count + 12 + 5 }
-        return sockets
+        let files = FileManager.default
+        guard let names = try? files.contentsOfDirectory(atPath: dir) else { return [] }
+        let sockets = names.filter {
+            $0.hasPrefix(Self.socketPrefix) && $0.hasSuffix(".sock") && $0.count == Self.socketPrefix.count + 12 + 5
+        }
+        return
+            sockets
             .map { (dir as NSString).appendingPathComponent($0) }
-            .compactMap { path -> (String, Date)? in
-                guard let at = (try? fm.attributesOfItem(atPath: path))?[.modificationDate] as? Date else { return nil }
-                return (path, at)
+            .compactMap { path -> (path: String, modified: Date)? in
+                guard let modified = (try? files.attributesOfItem(atPath: path))?[.modificationDate] as? Date else {
+                    return nil
+                }
+                return (path, modified)
             }
-            .sorted { $0.1 > $1.1 }
-            .map(\.0)
+            .sorted { $0.modified > $1.modified }
+            .map(\.path)
     }
 
     private func attach() {
@@ -146,58 +156,60 @@ final class ServiceLink {
                 setLink(.searching)
             }
         } else if since > Self.launchWait {
-            setLink(.searching) // it started but never answered; see its service.log
+            setLink(.searching)  // it started but never answered; see its service.log
         }
     }
 
     private static func connect(_ path: String) -> Int32? {
-        let fd = socket(AF_UNIX, SOCK_STREAM, 0)
-        guard fd >= 0 else { return nil }
-        var addr = sockaddr_un()
-        addr.sun_family = sa_family_t(AF_UNIX)
+        let socket = Darwin.socket(AF_UNIX, SOCK_STREAM, 0)
+        guard socket >= 0 else { return nil }
+        var address = sockaddr_un()
+        address.sun_family = sa_family_t(AF_UNIX)
         let bytes = Array(path.utf8CString)
-        guard bytes.count <= MemoryLayout.size(ofValue: addr.sun_path) else {
-            close(fd)
+        guard bytes.count <= MemoryLayout.size(ofValue: address.sun_path) else {
+            close(socket)
             return nil
         }
-        withUnsafeMutableBytes(of: &addr.sun_path) { raw in
-            for (i, b) in bytes.enumerated() { raw[i] = UInt8(bitPattern: b) }
+        withUnsafeMutableBytes(of: &address.sun_path) { raw in
+            for (index, byte) in bytes.enumerated() { raw[index] = UInt8(bitPattern: byte) }
         }
-        let ok = withUnsafePointer(to: &addr) {
-            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) { Darwin.connect(fd, $0, socklen_t(MemoryLayout<sockaddr_un>.size)) }
+        let result = withUnsafePointer(to: &address) {
+            $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+                Darwin.connect(socket, $0, socklen_t(MemoryLayout<sockaddr_un>.size))
+            }
         }
-        guard ok == 0 else {
-            close(fd) // a socket left by a service that crashed
+        guard result == 0 else {
+            close(socket)  // a socket left by a service that crashed
             return nil
         }
-        var on: Int32 = 1
-        setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &on, socklen_t(MemoryLayout<Int32>.size))
-        return fd
+        var noSigPipe: Int32 = 1
+        setsockopt(socket, SOL_SOCKET, SO_NOSIGPIPE, &noSigPipe, socklen_t(MemoryLayout<Int32>.size))
+        return socket
     }
 
     private func use(_ socket: Int32) {
-        fd = socket
+        descriptor = socket
         buffer = Data()
         let welcome = DispatchWorkItem { [weak self] in self?.setLink(.oldService) }
         welcomeWork = welcome
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.welcomeWait, execute: welcome)
-        let src = DispatchSource.makeReadSource(fileDescriptor: socket, queue: .main)
-        src.setEventHandler { [weak self] in
+        let source = DispatchSource.makeReadSource(fileDescriptor: socket, queue: .main)
+        source.setEventHandler { [weak self] in
             MainActor.assumeIsolated { self?.readAvailable() }
         }
-        source = src
-        src.resume()
+        reader = source
+        source.resume()
         write(["type": .string("attach"), "protocol": .number(Double(protocolVersion))])
     }
 
     private func readAvailable() {
         var chunk = [UInt8](repeating: 0, count: 65536)
-        let n = read(fd, &chunk, chunk.count)
-        if n <= 0 {
+        let count = read(descriptor, &chunk, chunk.count)
+        if count <= 0 {
             closed()
             return
         }
-        buffer.append(contentsOf: chunk[0..<n])
+        buffer.append(contentsOf: chunk[0..<count])
         while let end = buffer.firstIndex(of: 0x0A) {
             let line = buffer[buffer.startIndex..<end]
             buffer.removeSubrange(buffer.startIndex...end)
@@ -206,17 +218,17 @@ final class ServiceLink {
     }
 
     private func closed() {
-        source?.cancel()
-        source = nil
-        if fd >= 0 {
-            close(fd)
-            fd = -1
+        reader?.cancel()
+        reader = nil
+        if descriptor >= 0 {
+            close(descriptor)
+            descriptor = -1
         }
         welcomeWork?.cancel()
         let waiting = pending
         pending = [:]
-        for c in waiting.values {
-            c.resume(throwing: ServiceError(message: "The player service has stopped."))
+        for request in waiting.values {
+            request.resume(throwing: ServiceError(message: "The player service has stopped."))
         }
         if state != .outdated {
             setLink(.starting)
@@ -225,8 +237,9 @@ final class ServiceLink {
     }
 
     private func handle(_ line: Data) {
-        guard let m = try? decoder.decode(Incoming.self, from: line) else { return } // the next update arrives in full anyway
-        switch m.type {
+        // A line that doesn't decode is skipped: the next update arrives in full anyway.
+        guard let message = try? decoder.decode(Incoming.self, from: line) else { return }
+        switch message.type {
         case "welcome":
             welcomeWork?.cancel()
             setLink(.connected)
@@ -234,21 +247,21 @@ final class ServiceLink {
                 write(["type": .string("visuals"), "want": .bool(true)])
             }
         case "state":
-            if let s = m.state, let raw = try? decoder.decode([String: JSON].self, from: line)["state"] {
-                onState(s, raw)
+            if let state = message.state, let raw = try? decoder.decode([String: JSON].self, from: line)["state"] {
+                onState(state, raw)
             }
         case "status":
-            if let s = m.status { onStatus(s) }
+            if let status = message.status { onStatus(status) }
         case "notice":
-            if let t = m.text { onNotice(t) }
+            if let text = message.text { onNotice(text) }
         case "outdated":
             setLink(.outdated)
         case "result":
-            guard let id = m.id, let c = pending.removeValue(forKey: id) else { return }
-            if let error = m.error {
-                c.resume(throwing: ServiceError(message: error))
+            guard let id = message.id, let request = pending.removeValue(forKey: id) else { return }
+            if let error = message.error {
+                request.resume(throwing: ServiceError(message: error))
             } else {
-                c.resume(returning: m.value)
+                request.resume(returning: message.value)
             }
         default:
             break
@@ -256,14 +269,14 @@ final class ServiceLink {
     }
 
     private func write(_ message: [String: JSON]) {
-        guard fd >= 0, var data = try? JSONEncoder().encode(JSON.object(message)) else { return }
+        guard descriptor >= 0, var data = try? JSONEncoder().encode(JSON.object(message)) else { return }
         data.append(0x0A)
         data.withUnsafeBytes { raw in
             var offset = 0
             while offset < raw.count {
-                let n = Darwin.write(fd, raw.baseAddress! + offset, raw.count - offset)
-                if n <= 0 { break }
-                offset += n
+                let written = Darwin.write(descriptor, raw.baseAddress! + offset, raw.count - offset)
+                if written <= 0 { break }
+                offset += written
             }
         }
     }

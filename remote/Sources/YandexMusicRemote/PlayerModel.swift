@@ -55,10 +55,10 @@ final class PlayerModel {
     @ObservationIgnored let service = ServiceLink()
 
     init() {
-        service.onLink = { [weak self] s in self?.linkChanged(s) }
-        service.onState = { [weak self] s, raw in self?.stateChanged(s, raw) }
-        service.onStatus = { [weak self] s in
-            self?.status = s
+        service.onLink = { [weak self] link in self?.linkChanged(link) }
+        service.onState = { [weak self] state, raw in self?.stateChanged(state, raw) }
+        service.onStatus = { [weak self] status in
+            self?.status = status
             self?.statusAt = Date()
         }
         service.onNotice = { [weak self] text in
@@ -74,42 +74,44 @@ final class PlayerModel {
 
     var current: Track? { state?.current }
     var next: Track? {
-        guard let s = state, s.current != nil, s.index + 1 < s.queue.count else { return nil }
-        return s.queue[s.index + 1]
+        guard let state, state.current != nil, state.index + 1 < state.queue.count else { return nil }
+        return state.queue[state.index + 1]
     }
     var visuals: TrackVisuals? { current.flatMap { state?.visuals?[$0.baseId] } }
-    func isLiked(_ t: Track) -> Bool { state?.liked.contains(t.baseId) ?? false }
-    func isDisliked(_ t: Track) -> Bool { state?.disliked?.contains(t.baseId) ?? false }
-    func aiMark(_ t: Track) -> AiMark? { state?.aiMarks?[t.baseId] }
+    func isLiked(_ track: Track) -> Bool { state?.liked.contains(track.baseId) ?? false }
+    func isDisliked(_ track: Track) -> Bool { state?.disliked?.contains(track.baseId) ?? false }
+    func aiMark(_ track: Track) -> AiMark? { state?.aiMarks?[track.baseId] }
     var duration: Double { status.duration > 0 ? status.duration : (current?.durationMs ?? 0) / 1000 }
 
     func position(at now: Date) -> Double {
         guard status.playing else { return status.position }
-        let d = duration
-        return min(status.position + now.timeIntervalSince(statusAt), d > 0 ? d : .infinity)
+        let length = duration
+        return min(status.position + now.timeIntervalSince(statusAt), length > 0 ? length : .infinity)
     }
 
     var playing: Bool { status.playing && current != nil }
     var showsVideoInFront: Bool { videoFront && videoPlace == .background }
     var waveTuned: Bool { !(state?.waveSettings ?? [:]).isEmpty }
     var trackRadio: Bool {
-        guard let t = current, case let .station(id, _) = state?.source else { return false }
-        return id == "track:\(t.baseId)"
+        guard let current, case .station(let id, _) = state?.source else { return false }
+        return id == "track:\(current.baseId)"
     }
 
     /// The names of the My Vibe options chosen, rather than left to Yandex Music, in the settings' order.
     var waveChoices: [String] {
         let chosen = state?.waveSettings ?? [:]
-        return (state?.waveOptions ?? []).flatMap { g in g.options.filter { chosen[g.id] == $0.seed }.map(\.name) }
+        return (state?.waveOptions ?? []).flatMap { setting in
+            setting.options.filter { chosen[setting.id] == $0.seed }.map(\.name)
+        }
     }
 
     var sourceLabel: String {
         switch state?.source {
         case .wave: (["My Vibe"] + waveChoices).joined(separator: " · ")
-        case let .station(id, name): id.hasPrefix("track:") ? "Radio · \(name)" : "Station · \(name)"
+        case .station(let id, let name): id.hasPrefix("track:") ? "Radio · \(name)" : "Station · \(name)"
         case .liked: "Liked"
-        case let .playlist(p): p.title
-        case let .search(q): "Search · \(q)"
+        case .playlist(let playlist): playlist.title
+        case .search(let query): "Search · \(query)"
         case nil: ""
         }
     }
@@ -118,12 +120,31 @@ final class PlayerModel {
     var overlay: (String, String)? {
         switch link {
         case .starting: return ("Starting the player", "Connecting to Yandex Music…")
-        case .searching: return ("The player didn’t start", "Open VS Code with the Yandex Music extension once, then try again. The remote keeps trying by itself.")
-        case .noExtension: return ("Install Yandex Music for VS Code", "The remote controls the player of the Yandex Music extension. Install it in VS Code from the Extensions view, sign in there once, and the remote will start the player by itself.")
-        case .outdated: return ("Update needed", "This remote and the Yandex Music extension in VS Code speak different versions. Update both, then reload the VS Code windows.")
-        case .oldService: return ("Restart the player", "The player was started by an older version of the Yandex Music extension. Update the extension, then reload the VS Code windows.")
+        case .searching:
+            return (
+                "The player didn’t start",
+                "Open VS Code with the Yandex Music extension once, then try again. The remote keeps trying by itself."
+            )
+        case .noExtension:
+            return (
+                "Install Yandex Music for VS Code",
+                "The remote controls the player of the Yandex Music extension. Install it in VS Code "
+                    + "from the Extensions view, sign in there once, and the remote will start the player by itself."
+            )
+        case .outdated:
+            return (
+                "Update needed",
+                "This remote and the Yandex Music extension in VS Code speak different versions. "
+                    + "Update both, then reload the VS Code windows."
+            )
+        case .oldService:
+            return (
+                "Restart the player",
+                "The player was started by an older version of the Yandex Music extension. "
+                    + "Update the extension, then reload the VS Code windows."
+            )
         case .connected:
-            if let s = state, s.accountChecked, s.account == nil {
+            if let state, state.accountChecked, state.account == nil {
                 return ("Sign in in VS Code", "Run “Yandex Music: Sign In” from the VS Code Command Palette.")
             }
             return nil
@@ -132,20 +153,20 @@ final class PlayerModel {
 
     // MARK: - From the service
 
-    private func linkChanged(_ s: LinkState) {
-        link = s
-        if s != .connected { accountRequested = false }
+    private func linkChanged(_ newLink: LinkState) {
+        link = newLink
+        if newLink != .connected { accountRequested = false }
         checkAccount()
     }
 
-    private func stateChanged(_ s: SharedState, _ raw: JSON) {
-        state = s
+    private func stateChanged(_ newState: SharedState, _ raw: JSON) {
+        state = newState
         rawState = raw
         checkAccount()
-        if let e = s.lastError, e != lastError { show(e, error: true) }
-        lastError = s.lastError
+        if let error = newState.lastError, error != lastError { show(error, error: true) }
+        lastError = newState.lastError
         // The chosen My Vibe options are named in the source label, which needs the settings' names.
-        if case .wave = s.source, waveTuned, (s.waveOptions ?? []).isEmpty, !waveOptionsRequested {
+        if case .wave = newState.source, waveTuned, (newState.waveOptions ?? []).isEmpty, !waveOptionsRequested {
             waveOptionsRequested = true
             run("loadWaveSettings")
         }
@@ -153,17 +174,17 @@ final class PlayerModel {
 
     /// A service the app has just started hasn't looked up the account; VS Code windows do it on their own.
     private func checkAccount() {
-        if link == .connected, let s = state, !s.accountChecked, !accountRequested {
+        if link == .connected, let state, !state.accountChecked, !accountRequested {
             accountRequested = true
             run("refreshAccount")
         }
     }
 
     func show(_ text: String, error: Bool = false) {
-        let t = Toast(text: text, error: error)
-        toast = t
+        let shown = Toast(text: text, error: error)
+        toast = shown
         DispatchQueue.main.asyncAfter(deadline: .now() + (error ? 6 : 3.5)) { [weak self] in
-            if self?.toast == t { self?.toast = nil }
+            if self?.toast == shown { self?.toast = nil }
         }
     }
 
@@ -191,11 +212,12 @@ final class PlayerModel {
     func startTrackRadio() { run("startTrackRadio") }
     func playWave() { run("playSource", [encode(Source.wave)]) }
     func play(_ source: Source) { run("playSource", [encode(source)]) }
-    func playIndex(_ i: Int) { run("playIndex", [.number(Double(i))]) }
+    func playIndex(_ index: Int) { run("playIndex", [.number(Double(index))]) }
 
-    /// Plays a list the state holds (`likedTracks`, `searchResults`) from a track in it, sending the tracks as the service sent them.
-    func playList(_ key: String, from i: Int, as source: Source) {
-        run("playTracks", [rawState[key] ?? .array([]), .number(Double(i)), encode(source)])
+    /// Plays a list the state holds (`likedTracks`, `searchResults`) from a track in it, sending
+    /// the tracks as the service sent them.
+    func playList(_ key: String, from index: Int, as source: Source) {
+        run("playTracks", [rawState[key] ?? .array([]), .number(Double(index)), encode(source)])
     }
 
     func like() {
@@ -205,30 +227,30 @@ final class PlayerModel {
     }
 
     func playGenre() {
-        if let g = visuals?.genre { play(.station(id: "genre:\(g.id)", name: g.title)) }
+        if let genre = visuals?.genre { play(.station(id: "genre:\(genre.id)", name: genre.title)) }
     }
 
     func seek(fraction: Double) {
-        let d = duration
-        guard d > 0, current != nil else { return }
-        let to = min(1, max(0, fraction)) * d
-        status.position = to
+        let length = duration
+        guard length > 0, current != nil else { return }
+        let target = min(1, max(0, fraction)) * length
+        status.position = target
         statusAt = Date()
-        run("seek", [.number(to)])
+        run("seek", [.number(target)])
     }
 
     func setVolume(_ value: Double) {
-        let v = (min(1, max(0, value)) * 100).rounded() / 100
-        state?.volume = v // shown at once; the service confirms with its next state
-        run("setVolume", [.number(v)])
+        let volume = (min(1, max(0, value)) * 100).rounded() / 100
+        state?.volume = volume  // shown at once; the service confirms with its next state
+        run("setVolume", [.number(volume)])
     }
 
     func stepVolume(_ delta: Double) { setVolume((state?.volume ?? Self.defaultVolume) + delta) }
 
     func toggleMute() {
-        let v = state?.volume ?? Self.defaultVolume
-        if v > 0 {
-            preMuteVolume = v
+        let volume = state?.volume ?? Self.defaultVolume
+        if volume > 0 {
+            preMuteVolume = volume
             setVolume(0)
         } else {
             setVolume(preMuteVolume > 0 ? preMuteVolume : Self.defaultVolume)
@@ -274,17 +296,17 @@ final class PlayerModel {
 
     func toggleTune() { openDrawer(!(drawerOpen && tab == .vibe), .vibe) }
     func toggleLikedPill() { drawerOpen && tab == .liked ? openDrawer(false) : showLiked() }
-    func selectTab(_ t: Tab) { t == .liked ? showLiked() : openDrawer(true, t) }
+    func selectTab(_ tab: Tab) { tab == .liked ? showLiked() : openDrawer(true, tab) }
 
     func search(now: Bool) {
         searchWork?.cancel()
-        let q = query.trimmingCharacters(in: .whitespaces)
-        guard !q.isEmpty else { return }
+        let text = query.trimmingCharacters(in: .whitespaces)
+        guard !text.isEmpty else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
             searching = true
-            searchedQuery = q
-            run("search", [.string(q)]) { [weak self] in self?.searching = false }
+            searchedQuery = text
+            run("search", [.string(text)]) { [weak self] in self?.searching = false }
         }
         searchWork = work
         DispatchQueue.main.asyncAfter(deadline: .now() + (now ? 0 : Self.searchDelay), execute: work)

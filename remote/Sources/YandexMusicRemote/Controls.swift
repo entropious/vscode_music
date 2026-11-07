@@ -1,6 +1,6 @@
 import SwiftUI
 
-private func clamp(_ lo: CGFloat, _ v: CGFloat, _ hi: CGFloat) -> CGFloat { min(max(v, lo), hi) }
+private func clamp(_ low: CGFloat, _ value: CGFloat, _ high: CGFloat) -> CGFloat { min(max(value, low), high) }
 
 /// The sizes the stylesheet took from the window (`clamp(…vw…)`), worked out from its size; the
 /// cover and the dock get smaller while the drawer takes part of the screen.
@@ -34,15 +34,18 @@ struct Metrics {
 
 /// The wave of My Vibe: `M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0` in a 24×24 box.
 struct WaveShape: Shape {
-    func path(in r: CGRect) -> Path {
-        let s = min(r.width, r.height) / 24
-        let o = CGPoint(x: r.midX - 12 * s, y: r.midY - 12 * s)
-        func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: o.x + x * s, y: o.y + y * s) }
+    func path(in rect: CGRect) -> Path {
+        let scale = min(rect.width, rect.height) / 24
+        let origin = CGPoint(x: rect.midX - 12 * scale, y: rect.midY - 12 * scale)
+        /// A point of the 24×24 box, in the rectangle.
+        func point(_ x: CGFloat, _ y: CGFloat) -> CGPoint {
+            CGPoint(x: origin.x + x * scale, y: origin.y + y * scale)
+        }
         var path = Path()
-        path.move(to: p(3, 12))
-        path.addCurve(to: p(9, 12), control1: p(5, 9), control2: p(7, 9))
-        path.addCurve(to: p(15, 12), control1: p(11, 15), control2: p(13, 15))
-        path.addCurve(to: p(21, 12), control1: p(17, 9), control2: p(19, 9))
+        path.move(to: point(3, 12))
+        path.addCurve(to: point(9, 12), control1: point(5, 9), control2: point(7, 9))
+        path.addCurve(to: point(15, 12), control1: point(11, 15), control2: point(13, 15))
+        path.addCurve(to: point(21, 12), control1: point(17, 9), control2: point(19, 9))
         return path
     }
 }
@@ -64,28 +67,36 @@ struct PressStyle: ButtonStyle {
     }
 }
 
-/// A fill that lightens under the pointer.
-struct Hover<Content: View>: View {
+/// A fill that lightens under the pointer, and a border inside the same shape.
+struct Chip<S: InsettableShape>: ViewModifier {
+    let shape: S
     let base: Color
     let hover: Color
-    let shape: AnyShape
-    @ViewBuilder let content: (Bool) -> Content
+    let border: Color?
     @State private var over = false
 
-    var body: some View {
-        content(over)
-            .background(over ? hover : base, in: shape)
+    func body(content: Content) -> some View {
+        content
+            .background {
+                ZStack {
+                    shape.fill(over ? hover : base)
+                    if let border { shape.strokeBorder(border, lineWidth: 1) }
+                }
+            }
             .onHover { over = $0 }
             .animation(.easeOut(duration: 0.3), value: over)
     }
 }
 
 extension View {
-    /// A pill or rounded button's look: a fill that lightens under the pointer.
-    func chip(_ shape: some Shape, base: Color = .white.opacity(0.08), hover: Color = .white.opacity(0.14), border: Color? = nil) -> some View {
-        Hover(base: base, hover: hover, shape: AnyShape(shape)) { _ in
-            self.overlay { if let border { shape.stroke(border, lineWidth: 1) } }
-        }
+    /// A pill or rounded button's look: a fill that lightens under the pointer, and a border.
+    func chip(
+        _ shape: some InsettableShape,
+        base: Color = .white.opacity(0.08),
+        hover: Color = .white.opacity(0.14),
+        border: Color? = nil
+    ) -> some View {
+        modifier(Chip(shape: shape, base: base, hover: hover, border: border))
     }
 }
 

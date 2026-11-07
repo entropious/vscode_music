@@ -16,9 +16,10 @@ struct BackgroundView: View {
     let idle: Bool
 
     var body: some View {
-        GeometryReader { g in
-            let w = g.size.width, h = g.size.height
-            let vmax = max(w, h)
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let height = geometry.size.height
+            let longest = max(width, height)
             let front = model.showsVideoInFront
             // Every layer is placed by its center in the window, so none of them sizes the others.
             ZStack {
@@ -30,32 +31,42 @@ struct BackgroundView: View {
                             .resizable()
                             .interpolation(.high)
                             .saturation(1.5)
-                            .frame(width: w * 1.36, height: h * 1.36)
-                            .position(x: w / 2, y: h / 2)
+                            .frame(width: width * 1.36, height: height * 1.36)
+                            .position(x: width / 2, y: height / 2)
                             .opacity(0.95)
                             .id(blurred)
                             .transition(.opacity.animation(.easeInOut(duration: 1.4)))
                     }
-                    RadialGradient(colors: [palette.a, .clear], center: .center, startRadius: 0, endRadius: vmax * 0.35)
-                        .frame(width: vmax * 0.7, height: vmax * 0.7)
-                        .position(x: w * 0.52 + vmax * 0.35, y: -h * 0.2 + vmax * 0.35)
-                        .opacity(0.35)
-                    RadialGradient(colors: [palette.b, .clear], center: .center, startRadius: 0, endRadius: vmax * 0.3)
-                        .frame(width: vmax * 0.6, height: vmax * 0.6)
-                        .position(x: -w * 0.2 + vmax * 0.3, y: h * 0.4 + vmax * 0.3)
-                        .opacity(0.32)
+                    RadialGradient(
+                        colors: [palette.primary, .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: longest * 0.35
+                    )
+                    .frame(width: longest * 0.7, height: longest * 0.7)
+                    .position(x: width * 0.52 + longest * 0.35, y: -height * 0.2 + longest * 0.35)
+                    .opacity(0.35)
+                    RadialGradient(
+                        colors: [palette.secondary, .clear],
+                        center: .center,
+                        startRadius: 0,
+                        endRadius: longest * 0.3
+                    )
+                    .frame(width: longest * 0.6, height: longest * 0.6)
+                    .position(x: -width * 0.2 + longest * 0.3, y: height * 0.4 + longest * 0.3)
+                    .opacity(0.32)
                 }
                 .opacity(front ? 0 : 1)
                 if videos.place == .background {
                     backgroundVideo(front: front)
-                        .frame(width: w, height: h)
-                        .position(x: w / 2, y: h / 2)
+                        .frame(width: width, height: height)
+                        .position(x: width / 2, y: height / 2)
                 }
                 vignette
                     .opacity(front && idle ? 0 : 1)
                     .animation(.easeInOut(duration: 0.4), value: idle)
             }
-            .frame(width: w, height: h)
+            .frame(width: width, height: height)
             .clipped()
             .animation(.easeInOut(duration: 1.2), value: palette)
         }
@@ -73,13 +84,24 @@ struct BackgroundView: View {
 
     private var vignette: some View {
         ZStack {
-            RadialGradient(colors: [Color(red: 6 / 255, green: 7 / 255, blue: 10 / 255).opacity(0.15), Color(red: 6 / 255, green: 7 / 255, blue: 10 / 255).opacity(0.62)],
-                           center: UnitPoint(x: 0.35, y: 0.45), startRadius: 0, endRadius: 900)
-            LinearGradient(stops: [
-                .init(color: Color.black.opacity(0.38), location: 0),
-                .init(color: Color.black.opacity(0.18), location: 0.35),
-                .init(color: Color.black.opacity(0.72), location: 1),
-            ], startPoint: .top, endPoint: .bottom)
+            RadialGradient(
+                colors: [
+                    Color(red: 6 / 255, green: 7 / 255, blue: 10 / 255).opacity(0.15),
+                    Color(red: 6 / 255, green: 7 / 255, blue: 10 / 255).opacity(0.62),
+                ],
+                center: UnitPoint(x: 0.35, y: 0.45),
+                startRadius: 0,
+                endRadius: 900
+            )
+            LinearGradient(
+                stops: [
+                    .init(color: Color.black.opacity(0.38), location: 0),
+                    .init(color: Color.black.opacity(0.18), location: 0.35),
+                    .init(color: Color.black.opacity(0.72), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
         }
     }
 }
@@ -99,9 +121,9 @@ struct ArtView: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: artFrame, paused: !model.playing)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
-            let turn = model.playing ? (t.truncatingRemainder(dividingBy: 3.6) / 3.6) * 360 : 0
-            let breath = model.playing ? 1 + 0.011 * (1 - cos(t / 3.6 * 2 * .pi)) : 1
+            let time = context.date.timeIntervalSinceReferenceDate
+            let turn = model.playing ? (time.truncatingRemainder(dividingBy: 3.6) / 3.6) * 360 : 0
+            let breath = model.playing ? 1 + 0.011 * (1 - cos(time / 3.6 * 2 * .pi)) : 1
             ZStack(alignment: .topLeading) {
                 record(turn: turn)
                     .frame(width: size * 0.94, height: size * 0.94)
@@ -117,14 +139,15 @@ struct ArtView: View {
 
     private func record(turn: Double) -> some View {
         ZStack {
-            Canvas { ctx, s in
-                let r = s.width / 2
+            Canvas { context, canvasSize in
+                let center = canvasSize.width / 2
                 let groove: CGFloat = 2
-                var radius = r
+                var radius = center
                 var dark = true
                 while radius > 0 {
-                    let rect = CGRect(x: r - radius, y: r - radius, width: radius * 2, height: radius * 2)
-                    ctx.fill(Path(ellipseIn: rect), with: .color(dark ? Color(hex: "#121216") : Color(hex: "#1D1D23")))
+                    let ring = CGRect(x: center - radius, y: center - radius, width: radius * 2, height: radius * 2)
+                    let shade = dark ? Color(hex: "#121216") : Color(hex: "#1D1D23")
+                    context.fill(Path(ellipseIn: ring), with: .color(shade))
                     radius -= groove
                     dark.toggle()
                 }
@@ -135,7 +158,7 @@ struct ArtView: View {
                 if let label {
                     Image(bitmap: label).resizable().aspectRatio(contentMode: .fill)
                 } else {
-                    palette.a
+                    palette.primary
                 }
             }
             .clipShape(Circle())
@@ -145,15 +168,19 @@ struct ArtView: View {
         }
         .rotationEffect(.degrees(turn))
         .overlay(
-            AngularGradient(stops: [
-                .init(color: .clear, location: 0),
-                .init(color: .clear, location: 0.08),
-                .init(color: .white.opacity(0.10), location: 0.13),
-                .init(color: .clear, location: 0.19),
-                .init(color: .clear, location: 0.56),
-                .init(color: .white.opacity(0.07), location: 0.62),
-                .init(color: .clear, location: 0.68),
-            ], center: .center, angle: .degrees(20 - 90))
+            AngularGradient(
+                stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: .clear, location: 0.08),
+                    .init(color: .white.opacity(0.10), location: 0.13),
+                    .init(color: .clear, location: 0.19),
+                    .init(color: .clear, location: 0.56),
+                    .init(color: .white.opacity(0.07), location: 0.62),
+                    .init(color: .clear, location: 0.68),
+                ],
+                center: .center,
+                angle: .degrees(20 - 90)
+            )
             .clipShape(Circle())
         )
     }
@@ -174,7 +201,7 @@ struct ArtView: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.55), radius: 40, y: 32)
-        .shadow(color: palette.a.opacity(0.33), radius: 70)
+        .shadow(color: palette.primary.opacity(0.33), radius: 70)
     }
 }
 
@@ -185,29 +212,37 @@ struct ArtView: View {
 func fitTitle(_ text: String, width: CGFloat, full: CGFloat) -> (size: CGFloat, lines: Int) {
     let minSize: CGFloat = 32
     let oneLineShare: CGFloat = 0.6
-    func font(_ s: CGFloat) -> NSFont { NSFont(name: "IBMPlexSans-Bold", size: s) ?? .boldSystemFont(ofSize: s) }
-    func attributed(_ s: CGFloat) -> NSAttributedString {
-        NSAttributedString(string: text, attributes: [.font: font(s), .kern: -0.035 * s])
+    func font(_ points: CGFloat) -> NSFont {
+        NSFont(name: "IBMPlexSans-Bold", size: points) ?? .boldSystemFont(ofSize: points)
     }
-    func fits(_ lines: Int, _ s: CGFloat) -> Bool {
-        let a = attributed(s)
-        let longestWord = text.split(separator: " ").map { NSAttributedString(string: String($0), attributes: [.font: font(s), .kern: -0.035 * s]).size().width }.max() ?? 0
+    func styled(_ string: String, _ points: CGFloat) -> NSAttributedString {
+        NSAttributedString(string: string, attributes: [.font: font(points), .kern: -0.035 * points])
+    }
+    func fits(_ lines: Int, _ points: CGFloat) -> Bool {
+        let longestWord = text.split(separator: " ").map { styled(String($0), points).size().width }.max() ?? 0
         if longestWord > width { return false }
-        if lines == 1 { return a.size().width <= width }
-        let h = a.boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude), options: [.usesLineFragmentOrigin]).height
-        return h <= CGFloat(lines) * s * 1.15 + 1
+        let whole = styled(text, points)
+        if lines == 1 { return whole.size().width <= width }
+        let measured = font(points)
+        let lineHeight = measured.ascender - measured.descender + measured.leading
+        let height = whole.boundingRect(
+            with: CGSize(width: width, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin]
+        ).height
+        return height <= CGFloat(lines) * lineHeight + 1
     }
-    func largest(_ lines: Int, _ lo: CGFloat) -> CGFloat? {
+    func largest(_ lines: Int, _ smallest: CGFloat) -> CGFloat? {
         if fits(lines, full) { return full }
-        if !fits(lines, lo) { return nil }
-        var lo = lo, hi = full
-        while hi - lo > 1 {
-            let mid = (lo + hi) / 2
-            if fits(lines, mid) { lo = mid } else { hi = mid }
+        if !fits(lines, smallest) { return nil }
+        var low = smallest
+        var high = full
+        while high - low > 1 {
+            let middle = (low + high) / 2
+            if fits(lines, middle) { low = middle } else { high = middle }
         }
-        return lo.rounded(.down)
+        return low.rounded(.down)
     }
-    if let s = largest(1, max(minSize, full * oneLineShare)) { return (s, 1) }
+    if let size = largest(1, max(minSize, full * oneLineShare)) { return (size, 1) }
     return (largest(2, minSize) ?? minSize, 2)
 }
 
@@ -216,31 +251,43 @@ func fitTitle(_ text: String, width: CGFloat, full: CGFloat) -> (size: CGFloat, 
 struct InfoView: View {
     @Environment(PlayerModel.self) private var model
     let metrics: Metrics
+    /// The width the title has, which its size is fitted to.
+    @State private var titleWidth: CGFloat = 0
 
     var body: some View {
-        let t = model.current
+        let track = model.current
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
                 sourceLine
-                GeometryReader { g in
-                    let text = t?.fullTitle ?? "Nothing is playing"
-                    let fit = fitTitle(text, width: g.size.width, full: metrics.titleMax)
-                    Text(text)
-                        .font(Fonts.sans(fit.size, .bold))
-                        .tracking(-0.035 * fit.size)
-                        .lineLimit(fit.lines)
-                        .lineSpacing(fit.size * 0.15 - 4)
-                        .shadow(color: .black.opacity(0.35), radius: 20, y: 4)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                .frame(height: titleHeight(t))
-                Text(t?.artistLine ?? "Start My Vibe or Liked above")
+                let text = track?.fullTitle ?? "Nothing is playing"
+                let fit =
+                    titleWidth > 0
+                    ? fitTitle(text, width: titleWidth, full: metrics.titleMax) : (size: metrics.titleMax, lines: 2)
+                Text(text)
+                    .font(Fonts.sans(fit.size, .bold))
+                    .tracking(-0.035 * fit.size)
+                    .lineLimit(fit.lines)
+                    .padding(.vertical, Fonts.trim(to: 1.15, size: fit.size))
+                    .shadow(color: .black.opacity(0.35), radius: 20, y: 4)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .onGeometryChange(for: CGFloat.self) {
+                        $0.size.width
+                    } action: {
+                        titleWidth = $0
+                    }
+                Text(track?.artistLine ?? "Start My Vibe or Liked above")
                     .font(Fonts.sans(metrics.artist))
                     .foregroundStyle(.white.opacity(0.78))
                     .lineLimit(1)
+                    .padding(.vertical, Fonts.trim(to: 1.2, size: metrics.artist))
             }
-            .id(t?.id)
-            .transition(.asymmetric(insertion: .opacity.combined(with: .offset(y: 28)).combined(with: .scale(scale: 0.96)), removal: .identity))
+            .id(track?.id)
+            .transition(
+                .asymmetric(
+                    insertion: .opacity.combined(with: .offset(y: 28)).combined(with: .scale(scale: 0.96)),
+                    removal: .identity
+                )
+            )
             extras
             ProgressBars(metrics: metrics)
             if let next = model.next {
@@ -250,17 +297,10 @@ struct InfoView: View {
         .frame(minWidth: 360, maxWidth: 860, alignment: .leading)
     }
 
-    private func titleHeight(_ t: Track?) -> CGFloat {
-        let text = t?.fullTitle ?? "Nothing is playing"
-        let width = max(360, min(860, metrics.width - metrics.cover * 1.46 - metrics.nowGap - metrics.gutter * 2 - (metrics.drawerOpen ? metrics.drawer + 8 : 0)))
-        let fit = fitTitle(text, width: width, full: metrics.titleMax)
-        return fit.size * 1.15 * CGFloat(fit.lines)
-    }
-
     @ViewBuilder private var sourceLine: some View {
-        let t = model.current
-        let mark = t.flatMap { model.aiMark($0) }
-        let label = t == nil ? "" : model.sourceLabel
+        let track = model.current
+        let mark = track.flatMap { model.aiMark($0) }
+        let label = track == nil ? "" : model.sourceLabel
         if mark != nil || !label.isEmpty {
             HStack(spacing: 12) {
                 if let mark {
@@ -269,7 +309,10 @@ struct InfoView: View {
                         .foregroundStyle(Color(hex: "#FF7A5E"))
                         .padding(.horizontal, 10)
                         .padding(.vertical, 1)
-                        .background(Color(red: 20 / 255, green: 10 / 255, blue: 8 / 255).opacity(0.35), in: RoundedRectangle(cornerRadius: 8))
+                        .background(
+                            Color(red: 20 / 255, green: 10 / 255, blue: 8 / 255).opacity(0.35),
+                            in: RoundedRectangle(cornerRadius: 8)
+                        )
                         .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.ai, lineWidth: 2))
                         .help(mark.help)
                 }
@@ -337,32 +380,34 @@ struct ProgressBars: View {
     var body: some View {
         let heights = barHeights(model.current?.id ?? "", Self.count)
         TimelineView(.periodic(from: .now, by: 0.25)) { context in
-            let d = model.duration
-            let pos = model.position(at: context.date)
-            let frac = d > 0 ? min(1, pos / d) : 0
+            let length = model.duration
+            let position = model.position(at: context.date)
+            let played = length > 0 ? min(1, position / length) : 0
             VStack(spacing: 10) {
-                GeometryReader { g in
+                GeometryReader { geometry in
                     HStack(alignment: .center, spacing: metrics.barGap) {
-                        ForEach(0..<Self.count, id: \.self) { i in
-                            let on = (Double(i) + 0.5) / Double(Self.count) <= frac
+                        ForEach(0..<Self.count, id: \.self) { bar in
+                            let lit = (Double(bar) + 0.5) / Double(Self.count) <= played
                             Capsule()
-                                .fill(on ? Color.accent : Color.white.opacity(0.30))
-                                .shadow(color: on ? Color.accent.opacity(0.45) : .clear, radius: 7)
-                                .frame(height: g.size.height * heights[i])
+                                .fill(lit ? Color.accent : Color.white.opacity(0.30))
+                                .shadow(color: lit ? Color.accent.opacity(0.45) : .clear, radius: 7)
+                                .frame(height: geometry.size.height * heights[bar])
                                 .frame(maxWidth: .infinity)
                         }
                     }
                     .frame(maxHeight: .infinity)
                     .contentShape(Rectangle())
-                    .gesture(DragGesture(minimumDistance: 0).onEnded { v in
-                        model.seek(fraction: v.location.x / g.size.width)
-                    })
+                    .gesture(
+                        DragGesture(minimumDistance: 0).onEnded { drag in
+                            model.seek(fraction: drag.location.x / geometry.size.width)
+                        }
+                    )
                 }
                 .frame(height: metrics.bars)
                 HStack {
-                    Text(formatTime(pos)).foregroundStyle(.white)
+                    Text(formatTime(position)).foregroundStyle(.white)
                     Spacer()
-                    Text(formatTime(d)).foregroundStyle(.white.opacity(0.7))
+                    Text(formatTime(length)).foregroundStyle(.white.opacity(0.7))
                 }
                 .font(Fonts.mono(metrics.times))
             }
@@ -380,21 +425,33 @@ struct UpNext: View {
         Button(action: model.nextTrack) {
             HStack(spacing: 14) {
                 Group {
-                    if let art { Image(bitmap: art).resizable().aspectRatio(contentMode: .fill) } else { Color.white.opacity(0.1) }
+                    if let art {
+                        Image(bitmap: art).resizable().aspectRatio(contentMode: .fill)
+                    } else {
+                        Color.white.opacity(0.1)
+                    }
                 }
                 .frame(width: 52, height: 52)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 VStack(alignment: .leading, spacing: 1) {
                     Text("UP NEXT").font(Fonts.sans(14, .semibold)).tracking(1.1).foregroundStyle(.white.opacity(0.66))
-                    (Text(track.fullTitle).font(Fonts.sans(20, .semibold)) + Text(" · \(track.artistLine)").font(Fonts.sans(20)).foregroundColor(.white.opacity(0.7)))
+                    (Text(track.fullTitle).font(Fonts.sans(20, .semibold))
+                        + Text(" · \(track.artistLine)").font(Fonts.sans(20)).foregroundColor(.white.opacity(0.7)))
                         .lineLimit(1)
                 }
-                Image(systemName: "chevron.right").font(.system(size: 18, weight: .semibold)).foregroundStyle(.white.opacity(0.7)).padding(.leading, 6)
+                Image(systemName: "chevron.right").font(.system(size: 18, weight: .semibold)).foregroundStyle(
+                    .white.opacity(0.7)
+                ).padding(.leading, 6)
             }
             .padding(.leading, 12)
             .padding(.trailing, 22)
             .frame(height: 76)
-            .chip(RoundedRectangle(cornerRadius: 22), base: .white.opacity(0.07), hover: .white.opacity(0.12), border: .white.opacity(0.14))
+            .chip(
+                RoundedRectangle(cornerRadius: 22),
+                base: .white.opacity(0.07),
+                hover: .white.opacity(0.12),
+                border: .white.opacity(0.14)
+            )
         }
         .buttonStyle(PressStyle())
         .padding(.top, 6)
@@ -413,15 +470,29 @@ struct DockView: View {
     let metrics: Metrics
 
     var body: some View {
-        let t = model.current
-        let liked = t.map(model.isLiked) ?? false
-        let disliked = t.map(model.isDisliked) ?? false
+        let track = model.current
+        let liked = track.map(model.isLiked) ?? false
+        let disliked = track.map(model.isDisliked) ?? false
         let volume = model.state?.volume
         let muted = volume == 0
         HStack(spacing: metrics.dockGap) {
-            round(metrics.small, systemImage: "nosign", fill: disliked ? .white.opacity(0.26) : .white.opacity(0.10), color: disliked ? .white : .white.opacity(0.82), help: disliked ? "Remove dislike" : "Dislike and skip", action: model.dislike)
-                .disabled(t == nil)
-            round(metrics.side, systemImage: "backward.end.fill", fill: .white.opacity(0.14), color: .white, help: "Previous track", action: model.previous)
+            round(
+                metrics.small,
+                systemImage: "nosign",
+                fill: disliked ? .white.opacity(0.26) : .white.opacity(0.10),
+                color: disliked ? .white : .white.opacity(0.82),
+                help: disliked ? "Remove dislike" : "Dislike and skip",
+                action: model.dislike
+            )
+            .disabled(track == nil)
+            round(
+                metrics.side,
+                systemImage: "backward.end.fill",
+                fill: .white.opacity(0.14),
+                color: .white,
+                help: "Previous track",
+                action: model.previous
+            )
             Button(action: model.playPause) {
                 Image(systemName: model.status.playing ? "pause.fill" : "play.fill")
                     .font(.system(size: metrics.play * 0.36, weight: .bold))
@@ -433,31 +504,53 @@ struct DockView: View {
             }
             .buttonStyle(PressStyle())
             .help(model.status.playing ? "Pause" : "Play")
-            round(metrics.side, systemImage: "forward.end.fill", fill: .white.opacity(0.14), color: .white, help: "Next track", action: model.nextTrack)
+            round(
+                metrics.side,
+                systemImage: "forward.end.fill",
+                fill: .white.opacity(0.14),
+                color: .white,
+                help: "Next track",
+                action: model.nextTrack
+            )
             Button(action: model.like) {
                 Image(systemName: liked ? "heart.fill" : "heart")
                     .font(.system(size: metrics.small * 0.4, weight: .medium))
                     .foregroundStyle(liked ? Color.ai : .white.opacity(0.82))
-                    .keyframeAnimator(initialValue: 1.0, trigger: model.heartBeat) { v, s in v.scaleEffect(s) } keyframes: { _ in
-                        KeyframeTrack { CubicKeyframe(1.4, duration: 0.16); CubicKeyframe(1, duration: 0.29) }
+                    .keyframeAnimator(initialValue: 1.0, trigger: model.heartBeat) { heart, scale in
+                        heart.scaleEffect(scale)
+                    } keyframes: { _ in
+                        KeyframeTrack {
+                            CubicKeyframe(1.4, duration: 0.16)
+                            CubicKeyframe(1, duration: 0.29)
+                        }
                     }
                     .frame(width: metrics.small, height: metrics.small)
-                    .chip(Circle(), base: liked ? Color.like.opacity(0.22) : .white.opacity(0.10), hover: .white.opacity(0.2))
+                    .chip(
+                        Circle(),
+                        base: liked ? Color.like.opacity(0.22) : .white.opacity(0.10),
+                        hover: .white.opacity(0.2)
+                    )
             }
             .buttonStyle(PressStyle())
-            .disabled(t == nil)
+            .disabled(track == nil)
             .help(liked ? "Remove from Liked" : "Like")
             Rectangle().fill(.white.opacity(0.16)).frame(width: 1, height: 64).padding(.horizontal, 4)
             HStack(spacing: 10) {
-                square(systemImage: muted ? "speaker.slash" : "speaker.wave.2", help: muted ? "Unmute" : "Mute", action: model.toggleMute)
+                square(
+                    systemImage: muted ? "speaker.slash" : "speaker.wave.2",
+                    help: muted ? "Unmute" : "Mute",
+                    action: model.toggleMute
+                )
                 square(systemImage: "minus", help: "Volume down") { model.stepVolume(-PlayerModel.volumeStep) }
                 VStack(spacing: 8) {
                     Text(volume.map { String(Int(($0 * 100).rounded())) } ?? "—").font(Fonts.mono(22))
-                    GeometryReader { g in
+                    GeometryReader { geometry in
                         ZStack(alignment: .leading) {
                             Capsule().fill(.white.opacity(0.18))
-                            Capsule().fill(muted ? .white.opacity(0.4) : .white).frame(width: g.size.width * (volume ?? 0))
-                                .animation(.easeOut(duration: 0.3), value: volume)
+                            Capsule().fill(muted ? .white.opacity(0.4) : .white).frame(
+                                width: geometry.size.width * (volume ?? 0)
+                            )
+                            .animation(.easeOut(duration: 0.3), value: volume)
                         }
                     }
                     .frame(height: 10)
@@ -468,12 +561,22 @@ struct DockView: View {
         }
         .padding(.vertical, 16)
         .padding(.horizontal, min(32, max(16, metrics.width * 0.02)))
-        .background(Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.6), in: RoundedRectangle(cornerRadius: 44))
+        .background(
+            Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.6),
+            in: RoundedRectangle(cornerRadius: 44)
+        )
         .overlay(RoundedRectangle(cornerRadius: 44).stroke(.white.opacity(0.12), lineWidth: 1))
         .shadow(color: .black.opacity(0.35), radius: 30, y: 24)
     }
 
-    private func round(_ size: CGFloat, systemImage: String, fill: Color, color: Color, help: String, action: @escaping () -> Void) -> some View {
+    private func round(
+        _ size: CGFloat,
+        systemImage: String,
+        fill: Color,
+        color: Color,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: systemImage)
                 .font(.system(size: size * 0.32, weight: .semibold))

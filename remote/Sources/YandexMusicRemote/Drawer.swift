@@ -9,13 +9,18 @@ struct DrawerView: View {
         VStack(spacing: 14) {
             HStack(spacing: 10) {
                 HStack(spacing: 4) {
-                    ForEach(Tab.withButton, id: \.self) { t in
-                        Button { model.selectTab(t) } label: {
-                            Text(t.title)
+                    ForEach(Tab.withButton, id: \.self) { tab in
+                        Button {
+                            model.selectTab(tab)
+                        } label: {
+                            Text(tab.title)
                                 .font(Fonts.sans(20, .semibold))
-                                .foregroundStyle(model.tab == t ? .white : .white.opacity(0.7))
+                                .foregroundStyle(model.tab == tab ? .white : .white.opacity(0.7))
                                 .frame(maxWidth: .infinity, minHeight: 56)
-                                .background(model.tab == t ? Color.white.opacity(0.16) : .clear, in: RoundedRectangle(cornerRadius: 15))
+                                .background(
+                                    model.tab == tab ? Color.white.opacity(0.16) : .clear,
+                                    in: RoundedRectangle(cornerRadius: 15)
+                                )
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
@@ -23,10 +28,17 @@ struct DrawerView: View {
                 }
                 .padding(5)
                 .background(.white.opacity(0.07), in: RoundedRectangle(cornerRadius: 20))
-                Button { model.openDrawer(false) } label: {
-                    Image(systemName: "xmark").font(.system(size: 22, weight: .semibold))
+                Button {
+                    model.openDrawer(false)
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 22, weight: .semibold))
                         .frame(width: 66, height: 66)
-                        .chip(RoundedRectangle(cornerRadius: 20), base: .white.opacity(0.08), hover: .white.opacity(0.18))
+                        .chip(
+                            RoundedRectangle(cornerRadius: 20),
+                            base: .white.opacity(0.08),
+                            hover: .white.opacity(0.18)
+                        )
                 }
                 .buttonStyle(PressStyle())
                 .help("Close")
@@ -51,10 +63,13 @@ struct DrawerView: View {
             }
         }
         .padding(18)
-        .background(Color(red: 12 / 255, green: 14 / 255, blue: 20 / 255).opacity(0.9), in: RoundedRectangle(cornerRadius: 32))
+        .background(
+            Color(red: 12 / 255, green: 14 / 255, blue: 20 / 255).opacity(0.9),
+            in: RoundedRectangle(cornerRadius: 32)
+        )
         .overlay(RoundedRectangle(cornerRadius: 32).stroke(.white.opacity(0.12), lineWidth: 1))
         .shadow(color: .black.opacity(0.45), radius: 40, y: 30)
-        .onChange(of: model.tab, initial: true) { _, t in queryFocused = t == .search }
+        .onChange(of: model.tab, initial: true) { _, tab in queryFocused = tab == .search }
     }
 
     private func hint(_ text: String) -> some View {
@@ -67,10 +82,12 @@ struct DrawerView: View {
     }
 
     @ViewBuilder private var queue: some View {
-        if let s = model.state, !s.queue.isEmpty {
-            ForEach(Array(s.queue.enumerated()), id: \.offset) { i, t in
-                TrackRow(track: t, current: i == s.index, past: i < s.index) { model.playIndex(i) }
-                    .id(i)
+        if let state = model.state, !state.queue.isEmpty {
+            ForEach(Array(state.queue.enumerated()), id: \.offset) { index, track in
+                TrackRow(track: track, current: index == state.index, past: index < state.index) {
+                    model.playIndex(index)
+                }
+                .id(index)
             }
         } else {
             hint("The queue is empty. Start My Vibe or a playlist.")
@@ -85,32 +102,47 @@ struct DrawerView: View {
             hint(model.likedLoading ? "Loading Liked…" : "No Liked tracks yet.")
         } else {
             // Nothing plays until a track is picked; then Liked plays from it.
-            ForEach(Array(tracks.enumerated()), id: \.offset) { i, t in
-                TrackRow(track: t, current: model.current?.id == t.id) { model.playList("likedTracks", from: i, as: .liked) }
+            ForEach(Array(tracks.enumerated()), id: \.offset) { index, track in
+                TrackRow(track: track, current: model.current?.id == track.id) {
+                    model.playList("likedTracks", from: index, as: .liked)
+                }
             }
         }
     }
 
     @ViewBuilder private var vibe: some View {
-        let groups = model.state?.waveOptions ?? []
+        let settings = model.state?.waveOptions ?? []
         let chosen = model.state?.waveSettings ?? [:]
-        if groups.isEmpty {
-            hint(model.state?.account != nil ? "Loading My Vibe settings…" : "Sign in to Yandex Music in VS Code to set up My Vibe.")
+        if settings.isEmpty {
+            hint(
+                model.state?.account != nil
+                    ? "Loading My Vibe settings…" : "Sign in to Yandex Music in VS Code to set up My Vibe."
+            )
         } else {
-            ForEach(groups, id: \.id) { g in
+            ForEach(settings, id: \.id) { setting in
                 VStack(alignment: .leading, spacing: 12) {
-                    Text(g.name).font(Fonts.sans(17, .semibold)).tracking(0.7).foregroundStyle(.white.opacity(0.66))
+                    Text(setting.name)
+                        .font(Fonts.sans(17, .semibold))
+                        .tracking(0.7)
+                        .foregroundStyle(.white.opacity(0.66))
                     FlowLayout(spacing: 10) {
                         // No option chosen is the "any" one, left to Yandex Music.
-                        ForEach(g.options.filter { $0.any != true }, id: \.seed) { o in
-                            let on = chosen[g.id] == o.seed
-                            Button { model.pickWave(g.id, o.seed) } label: {
-                                Text(o.name)
-                                    .font(Fonts.sans(20, on ? .semibold : .medium))
-                                    .foregroundStyle(on ? Color.ink : .white)
+                        ForEach(setting.options.filter { $0.any != true }, id: \.seed) { option in
+                            let picked = chosen[setting.id] == option.seed
+                            Button {
+                                model.pickWave(setting.id, option.seed)
+                            } label: {
+                                Text(option.name)
+                                    .font(Fonts.sans(20, picked ? .semibold : .medium))
+                                    .foregroundStyle(picked ? Color.ink : .white)
                                     .padding(.horizontal, 22)
                                     .frame(height: 56)
-                                    .chip(Capsule(), base: on ? .accent : .white.opacity(0.06), hover: on ? .accent : .white.opacity(0.12), border: on ? .accent : .white.opacity(0.18))
+                                    .chip(
+                                        Capsule(),
+                                        base: picked ? .accent : .white.opacity(0.06),
+                                        hover: picked ? .accent : .white.opacity(0.12),
+                                        border: picked ? .accent : .white.opacity(0.18)
+                                    )
                             }
                             .buttonStyle(PressStyle())
                         }
@@ -128,17 +160,30 @@ struct DrawerView: View {
     ].map { (Color(hex: $0.0), Color(hex: $0.1)) }
 
     @ViewBuilder private var playlists: some View {
-        if let s = model.state, s.account != nil {
+        if let state = model.state, state.account != nil {
             LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                let likedNow = if case .liked = s.source { true } else { false }
-                PlaylistTile(name: "Liked", sub: "Your collection", systemImage: "heart.fill", colors: Self.tileColors[0], current: likedNow, action: model.showLiked)
-                ForEach(s.playlists, id: \.key) { p in
-                    let current = if case let .playlist(q) = s.source { q.key == p.key } else { false }
-                    PlaylistTile(name: p.title, sub: "\(p.trackCount) \(p.trackCount == 1 ? "track" : "tracks")", systemImage: "music.note.list",
-                                 colors: Self.tileColors[Int(stableHash(p.key) % UInt32(Self.tileColors.count))], current: current) { model.play(.playlist(p)) }
+                let likedPlaying = if case .liked = state.source { true } else { false }
+                PlaylistTile(
+                    name: "Liked",
+                    subtitle: "Your collection",
+                    systemImage: "heart.fill",
+                    colors: Self.tileColors[0],
+                    current: likedPlaying,
+                    action: model.showLiked
+                )
+                ForEach(state.playlists, id: \.key) { playlist in
+                    let playing =
+                        if case .playlist(let source) = state.source { source.key == playlist.key } else { false }
+                    PlaylistTile(
+                        name: playlist.title,
+                        subtitle: "\(playlist.trackCount) \(playlist.trackCount == 1 ? "track" : "tracks")",
+                        systemImage: "music.note.list",
+                        colors: Self.tileColors[Int(stableHash(playlist.key) % UInt32(Self.tileColors.count))],
+                        current: playing
+                    ) { model.play(.playlist(playlist)) }
                 }
             }
-            if s.playlists.isEmpty {
+            if state.playlists.isEmpty {
                 hint(model.playlistsRequested ? "Loading playlists…" : "No playlists yet.")
             }
         } else {
@@ -149,7 +194,9 @@ struct DrawerView: View {
     @ViewBuilder private var search: some View {
         @Bindable var model = model
         HStack(spacing: 12) {
-            Image(systemName: "magnifyingglass").font(.system(size: 22, weight: .medium)).foregroundStyle(.white.opacity(0.7))
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 22, weight: .medium))
+                .foregroundStyle(.white.opacity(0.7))
             TextField("Track, artist or genre", text: $model.query)
                 .textFieldStyle(.plain)
                 .font(Fonts.sans(22))
@@ -162,23 +209,27 @@ struct DrawerView: View {
         .background(.black.opacity(0.3), in: RoundedRectangle(cornerRadius: 20))
         .overlay(RoundedRectangle(cornerRadius: 20).stroke(Color.accent, lineWidth: 2))
         .padding(.bottom, 4)
-        let q = model.query.trimmingCharacters(in: .whitespaces)
-        let fresh = model.state != nil && !q.isEmpty && q == model.searchedQuery
+        let typed = model.query.trimmingCharacters(in: .whitespaces)
+        let fresh = model.state != nil && !typed.isEmpty && typed == model.searchedQuery
         let stations = fresh ? model.state?.searchStations ?? [] : []
         let results = fresh ? model.state?.searchResults ?? [] : []
-        if q.isEmpty {
+        if typed.isEmpty {
             hint("Type a track, artist or genre. Tap a result to play it.")
         } else if model.searching {
             hint("Searching…")
         } else if fresh, stations.isEmpty, results.isEmpty {
             hint("Nothing found")
         }
-        ForEach(stations, id: \.id) { st in
-            let current = if case let .station(id, _) = model.state?.source { id == st.id } else { false }
-            StationRow(station: st, current: current) { model.play(.station(id: st.id, name: st.name)) }
+        ForEach(stations, id: \.id) { station in
+            let playing = if case .station(let id, _) = model.state?.source { id == station.id } else { false }
+            StationRow(station: station, current: playing) {
+                model.play(.station(id: station.id, name: station.name))
+            }
         }
-        ForEach(Array(results.enumerated()), id: \.offset) { i, t in
-            TrackRow(track: t, current: model.current?.id == t.id) { model.playList("searchResults", from: i, as: .search(query: model.searchedQuery)) }
+        ForEach(Array(results.enumerated()), id: \.offset) { index, track in
+            TrackRow(track: track, current: model.current?.id == track.id) {
+                model.playList("searchResults", from: index, as: .search(query: model.searchedQuery))
+            }
         }
     }
 }
@@ -199,12 +250,17 @@ struct TrackRow: View {
                     Text(track.fullTitle)
                         .font(Fonts.sans(22, current ? .semibold : .medium))
                         .foregroundStyle(current ? Color(hex: "#FFE070") : .white)
-                    Text(track.artistLine).font(Fonts.sans(17)).foregroundStyle(.white.opacity(0.66))
+                    Text(track.artistLine)
+                        .font(Fonts.sans(17))
+                        .foregroundStyle(.white.opacity(0.66))
                 }
                 .lineLimit(1)
                 Spacer(minLength: 0)
                 if model.isLiked(track) {
-                    Image(systemName: "heart.fill").font(.system(size: 18)).foregroundStyle(Color.like).help("Liked")
+                    Image(systemName: "heart.fill")
+                        .font(.system(size: 18))
+                        .foregroundStyle(Color.like)
+                        .help("Liked")
                 }
                 if let mark = model.aiMark(track) {
                     Text(mark.badge)
@@ -214,13 +270,19 @@ struct TrackRow: View {
                         .overlay(RoundedRectangle(cornerRadius: 7).stroke(Color.ai, lineWidth: 2))
                         .help(mark.help)
                 }
-                if let ms = track.durationMs {
-                    Text(formatTime(ms / 1000)).font(Fonts.mono(18)).foregroundStyle(.white.opacity(0.66))
+                if let milliseconds = track.durationMs {
+                    Text(formatTime(milliseconds / 1000))
+                        .font(Fonts.mono(18))
+                        .foregroundStyle(.white.opacity(0.66))
                 }
             }
             .padding(.horizontal, 12)
             .frame(height: 84)
-            .chip(RoundedRectangle(cornerRadius: 20), base: current ? Color.accent.opacity(0.14) : .clear, hover: current ? Color.accent.opacity(0.2) : .white.opacity(0.07))
+            .chip(
+                RoundedRectangle(cornerRadius: 20),
+                base: current ? Color.accent.opacity(0.14) : .clear,
+                hover: current ? Color.accent.opacity(0.2) : .white.opacity(0.07)
+            )
             .opacity(track.available == false ? 0.4 : past ? 0.5 : 1)
         }
         .buttonStyle(.plain)
@@ -259,16 +321,16 @@ struct Equalizer: View {
 
     var body: some View {
         TimelineView(.animation(minimumInterval: 1.0 / 30, paused: !running)) { context in
-            let t = context.date.timeIntervalSinceReferenceDate
+            let time = context.date.timeIntervalSinceReferenceDate
             HStack(alignment: .bottom, spacing: 4) {
-                ForEach(0..<3, id: \.self) { i in
-                    let b = bars[i]
+                ForEach(0..<3, id: \.self) { index in
+                    let bar = bars[index]
                     // Alternating 1 → .38 → 1, as `now-bounce … infinite alternate`.
-                    let x = ((t - b.phase) / b.period).truncatingRemainder(dividingBy: 2)
-                    let k = x < 1 ? x : 2 - x
+                    let cycle = ((time - bar.phase) / bar.period).truncatingRemainder(dividingBy: 2)
+                    let squeeze = cycle < 1 ? cycle : 2 - cycle
                     RoundedRectangle(cornerRadius: 3)
                         .fill(Color.accent)
-                        .frame(width: 5, height: 26 * (running ? 1 - 0.62 * k : 1))
+                        .frame(width: 5, height: 26 * (running ? 1 - 0.62 * squeeze : 1))
                 }
             }
             .frame(height: 26, alignment: .bottom)
@@ -298,25 +360,33 @@ struct StationRow: View {
                 .frame(width: 60, height: 60)
                 .clipShape(RoundedRectangle(cornerRadius: 13))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(station.name).font(Fonts.sans(22, current ? .semibold : .medium)).foregroundStyle(current ? Color(hex: "#FFE070") : .white)
-                    Text("Genre station").font(Fonts.sans(17)).foregroundStyle(.white.opacity(0.66))
+                    Text(station.name)
+                        .font(Fonts.sans(22, current ? .semibold : .medium))
+                        .foregroundStyle(current ? Color(hex: "#FFE070") : .white)
+                    Text("Genre station")
+                        .font(Fonts.sans(17))
+                        .foregroundStyle(.white.opacity(0.66))
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 12)
             .frame(height: 84)
-            .chip(RoundedRectangle(cornerRadius: 20), base: current ? Color.accent.opacity(0.14) : .clear, hover: .white.opacity(0.07))
+            .chip(
+                RoundedRectangle(cornerRadius: 20),
+                base: current ? Color.accent.opacity(0.14) : .clear,
+                hover: .white.opacity(0.07)
+            )
         }
         .buttonStyle(.plain)
         .task(id: station.icon) {
-            if let s = station.icon, let url = URL(string: s) { icon = await ImageStore.shared.load(url) }
+            if let link = station.icon, let url = URL(string: link) { icon = await ImageStore.shared.load(url) }
         }
     }
 }
 
 struct PlaylistTile: View {
     let name: String
-    let sub: String
+    let subtitle: String
     let systemImage: String
     let colors: (Color, Color)
     let current: Bool
@@ -325,20 +395,42 @@ struct PlaylistTile: View {
     var body: some View {
         Button(action: action) {
             VStack(alignment: .leading, spacing: 10) {
-                GeometryReader { g in
+                GeometryReader { geometry in
+                    let side = geometry.size.width
                     ZStack {
-                        LinearGradient(colors: [colors.0, Color(hex: "#0B0D12")], startPoint: .topLeading, endPoint: .bottomTrailing)
-                        Circle().fill(colors.1).frame(width: g.size.width * 0.44).position(x: g.size.width * 0.3, y: g.size.height * 0.3)
-                        Image(systemName: systemImage).font(.system(size: g.size.width * 0.3)).foregroundStyle(.white.opacity(0.85))
+                        LinearGradient(
+                            colors: [colors.0, Color(hex: "#0B0D12")],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                        Circle()
+                            .fill(colors.1)
+                            .frame(width: side * 0.44)
+                            .position(x: side * 0.3, y: geometry.size.height * 0.3)
+                        Image(systemName: systemImage)
+                            .font(.system(size: side * 0.3))
+                            .foregroundStyle(.white.opacity(0.85))
                     }
                 }
                 .aspectRatio(1, contentMode: .fit)
                 .clipShape(RoundedRectangle(cornerRadius: 14))
-                Text(name).font(Fonts.sans(20, .semibold)).lineLimit(1).padding(.horizontal, 4)
-                Text(sub).font(Fonts.sans(16)).foregroundStyle(.white.opacity(0.66)).padding(.horizontal, 4).padding(.bottom, 4)
+                Text(name)
+                    .font(Fonts.sans(20, .semibold))
+                    .lineLimit(1)
+                    .padding(.horizontal, 4)
+                Text(subtitle)
+                    .font(Fonts.sans(16))
+                    .foregroundStyle(.white.opacity(0.66))
+                    .padding(.horizontal, 4)
+                    .padding(.bottom, 4)
             }
             .padding(10)
-            .chip(RoundedRectangle(cornerRadius: 22), base: .white.opacity(0.05), hover: .white.opacity(0.1), border: current ? .accent : .clear)
+            .chip(
+                RoundedRectangle(cornerRadius: 22),
+                base: .white.opacity(0.05),
+                hover: .white.opacity(0.1),
+                border: current ? .accent : .clear
+            )
         }
         .buttonStyle(.plain)
     }
@@ -349,34 +441,39 @@ struct FlowLayout: Layout {
     var spacing: CGFloat
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
-        let width = proposal.width ?? .infinity
-        var x: CGFloat = 0, y: CGFloat = 0, row: CGFloat = 0, widest: CGFloat = 0
-        for v in subviews {
-            let s = v.sizeThatFits(.unspecified)
-            if x > 0, x + s.width > width {
-                y += row + spacing
-                x = 0
-                row = 0
+        let available = proposal.width ?? .infinity
+        var rowEnd: CGFloat = 0
+        var rowTop: CGFloat = 0
+        var rowHeight: CGFloat = 0
+        var widest: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if rowEnd > 0, rowEnd + size.width > available {
+                rowTop += rowHeight + spacing
+                rowEnd = 0
+                rowHeight = 0
             }
-            x += s.width + spacing
-            row = max(row, s.height)
-            widest = max(widest, x - spacing)
+            rowEnd += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+            widest = max(widest, rowEnd - spacing)
         }
-        return CGSize(width: min(widest, width), height: y + row)
+        return CGSize(width: min(widest, available), height: rowTop + rowHeight)
     }
 
     func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
-        var x = bounds.minX, y = bounds.minY, row: CGFloat = 0
-        for v in subviews {
-            let s = v.sizeThatFits(.unspecified)
-            if x > bounds.minX, x + s.width > bounds.maxX {
-                y += row + spacing
-                x = bounds.minX
-                row = 0
+        var left = bounds.minX
+        var top = bounds.minY
+        var rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if left > bounds.minX, left + size.width > bounds.maxX {
+                top += rowHeight + spacing
+                left = bounds.minX
+                rowHeight = 0
             }
-            v.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(s))
-            x += s.width + spacing
-            row = max(row, s.height)
+            subview.place(at: CGPoint(x: left, y: top), proposal: ProposedViewSize(size))
+            left += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
         }
     }
 }

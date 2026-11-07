@@ -28,15 +28,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         Fonts.register()
-        let w = NSWindow(contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900), styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView], backing: .buffered, defer: false)
-        w.title = "Yandex Music Remote"
-        w.titlebarAppearsTransparent = true
-        w.titleVisibility = .hidden
-        w.isReleasedWhenClosed = false
-        w.minSize = NSSize(width: 720, height: 600)
-        w.contentView = NSHostingView(rootView: WindowContent().environment(model).environment(videos))
-        window = w
-        w.makeKeyAndOrderFront(nil)
+        let mainWindow = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 1440, height: 900),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        mainWindow.title = "Yandex Music Remote"
+        mainWindow.titlebarAppearsTransparent = true
+        mainWindow.titleVisibility = .hidden
+        mainWindow.isReleasedWhenClosed = false
+        mainWindow.minSize = NSSize(width: 720, height: 600)
+        mainWindow.contentView = NSHostingView(rootView: WindowContent().environment(model).environment(videos))
+        window = mainWindow
+        mainWindow.makeKeyAndOrderFront(nil)
         NSApp.activate()
         model.start()
     }
@@ -61,11 +66,13 @@ struct WindowContent: View {
 
     var body: some View {
         RootView(frames: frames, idle: idle)
-            .background(WindowReader { w in
-                guard window == nil else { return }
-                window = w
-                configure(w)
-            })
+            .background(
+                WindowReader { hostWindow in
+                    guard window == nil else { return }
+                    window = hostWindow
+                    configure(hostWindow)
+                }
+            )
             .onAppear(perform: installMonitors)
             .onChange(of: model.current?.id, initial: true) { showVideo() }
             .onChange(of: model.visuals, initial: true) { showVideo() }
@@ -85,71 +92,86 @@ struct WindowContent: View {
     }
 
     /// Without --fullscreen the window takes the whole screen short of the menu bar and the Dock.
-    private func configure(_ w: NSWindow) {
+    private func configure(_ window: NSWindow) {
         // Not restored: the system would keep a picture of the whole window (some 30 MB) for the next launch.
-        w.isRestorable = false
-        w.backgroundColor = NSColor(red: 6 / 255, green: 7 / 255, blue: 10 / 255, alpha: 1)
-        w.acceptsMouseMovedEvents = true
-        w.collectionBehavior.insert(.fullScreenPrimary)
-        if let screen = w.screen ?? NSScreen.main {
-            w.setFrame(screen.visibleFrame, display: true)
+        window.isRestorable = false
+        window.backgroundColor = NSColor(red: 6 / 255, green: 7 / 255, blue: 10 / 255, alpha: 1)
+        window.acceptsMouseMovedEvents = true
+        window.collectionBehavior.insert(.fullScreenPrimary)
+        if let screen = window.screen ?? NSScreen.main {
+            window.setFrame(screen.visibleFrame, display: true)
         }
         if CommandLine.arguments.contains("--fullscreen") {
-            w.toggleFullScreen(nil)
+            window.toggleFullScreen(nil)
         }
-        NotificationCenter.default.addObserver(forName: NSWindow.didChangeOcclusionStateNotification, object: w, queue: .main) { _ in
-            MainActor.assumeIsolated { visibilityChanged(w) }
+        NotificationCenter.default.addObserver(
+            forName: NSWindow.didChangeOcclusionStateNotification,
+            object: window,
+            queue: .main
+        ) { _ in
+            MainActor.assumeIsolated { visibilityChanged(window) }
         }
-        visibilityChanged(w)
+        visibilityChanged(window)
         if let path = ProcessInfo.processInfo.environment["YM_SNAPSHOT"] {
-            snapshot(w, to: path)
+            snapshot(window, to: path)
         }
     }
 
     /// For development: saves a picture of the window to `path` every few seconds (YM_SNAPSHOT).
-    private func snapshot(_ w: NSWindow, to path: String) {
+    private func snapshot(_ window: NSWindow, to path: String) {
         DispatchQueue.main.asyncAfter(deadline: .now() + 8) {
-            if let view = w.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
-                view.cacheDisplay(in: view.bounds, to: rep)
-                try? rep.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
+            if let view = window.contentView, let bitmap = view.bitmapImageRepForCachingDisplay(in: view.bounds) {
+                view.cacheDisplay(in: view.bounds, to: bitmap)
+                try? bitmap.representation(using: .png, properties: [:])?.write(to: URL(fileURLWithPath: path))
             }
-            snapshot(w, to: path)
+            snapshot(window, to: path)
         }
     }
 
     /// Videos play, and the service looks up videos and genres, only while the window is seen.
-    private func visibilityChanged(_ w: NSWindow) {
-        let visible = w.occlusionState.contains(.visible)
+    private func visibilityChanged(_ window: NSWindow) {
+        let visible = window.occlusionState.contains(.visible)
         videos.visible = visible
         model.service.wantVisuals(visible)
     }
 
-    private func keepAwake(_ on: Bool) {
-        if on, awake == nil {
-            var id = IOPMAssertionID(0)
-            if IOPMAssertionCreateWithName(kIOPMAssertPreventUserIdleDisplaySleep as CFString, IOPMAssertionLevel(kIOPMAssertionLevelOn), "Yandex Music is playing" as CFString, &id) == kIOReturnSuccess {
-                awake = id
+    private func keepAwake(_ wanted: Bool) {
+        if wanted, awake == nil {
+            var assertion = IOPMAssertionID(0)
+            if IOPMAssertionCreateWithName(
+                kIOPMAssertPreventUserIdleDisplaySleep as CFString,
+                IOPMAssertionLevel(kIOPMAssertionLevelOn),
+                "Yandex Music is playing" as CFString,
+                &assertion
+            ) == kIOReturnSuccess {
+                awake = assertion
             }
-        } else if !on, let id = awake {
-            IOPMAssertionRelease(id)
+        } else if !wanted, let assertion = awake {
+            IOPMAssertionRelease(assertion)
             awake = nil
         }
     }
 
     private func installMonitors() {
         guard monitors.isEmpty else { return }
-        monitors.append(NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
-            handleKey(event) ? nil : event
-        } as Any)
-        monitors.append(NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { event in
-            wake()
-            return event
-        } as Any)
-        monitors.append(NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
-            wake()
-            closeDrawerOutside(event)
-            return event
-        } as Any)
+        monitors.append(
+            NSEvent.addLocalMonitorForEvents(matching: .keyDown) { event in
+                handleKey(event) ? nil : event
+            } as Any
+        )
+        monitors.append(
+            NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved, .leftMouseDragged]) { event in
+                wake()
+                return event
+            } as Any
+        )
+        monitors.append(
+            NSEvent.addLocalMonitorForEvents(matching: .leftMouseDown) { event in
+                wake()
+                closeDrawerOutside(event)
+                return event
+            } as Any
+        )
         wake()
     }
 
@@ -168,16 +190,16 @@ struct WindowContent: View {
     /// A click anywhere outside the drawer closes it, and does what it does there too. The
     /// buttons that open the drawer open, switch or close it themselves.
     private func closeDrawerOutside(_ event: NSEvent) {
-        guard model.drawerOpen, let w = event.window, let content = w.contentView else { return }
-        let p = CGPoint(x: event.locationInWindow.x, y: content.bounds.height - event.locationInWindow.y)
-        if frames.drawer.contains(p) || frames.openers.values.contains(where: { $0.contains(p) }) { return }
+        guard model.drawerOpen, let content = event.window?.contentView else { return }
+        let click = CGPoint(x: event.locationInWindow.x, y: content.bounds.height - event.locationInWindow.y)
+        if frames.drawer.contains(click) || frames.openers.values.contains(where: { $0.contains(click) }) { return }
         DispatchQueue.main.async { model.openDrawer(false) }
     }
 
     /// The keys of the web version; true when the key was taken.
     private func handleKey(_ event: NSEvent) -> Bool {
         let typing = event.window?.firstResponder is NSTextView
-        if event.keyCode == 53 { // Esc
+        if event.keyCode == 53 {  // Esc
             if typing {
                 event.window?.makeFirstResponder(nil)
             } else {
@@ -187,11 +209,11 @@ struct WindowContent: View {
         }
         if typing || !event.modifierFlags.intersection([.command, .control, .option]).isEmpty { return false }
         switch event.keyCode {
-        case 49: model.playPause() // space
-        case 124: model.nextTrack() // →
-        case 123: model.previous() // ←
-        case 126: model.stepVolume(PlayerModel.volumeStep) // ↑
-        case 125: model.stepVolume(-PlayerModel.volumeStep) // ↓
+        case 49: model.playPause()  // space
+        case 124: model.nextTrack()  // →
+        case 123: model.previous()  // ←
+        case 126: model.stepVolume(PlayerModel.volumeStep)  // ↑
+        case 125: model.stepVolume(-PlayerModel.volumeStep)  // ↓
         default:
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "l": model.like()
@@ -222,10 +244,10 @@ struct WindowReader: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> ReaderView {
-        let v = ReaderView()
-        v.found = found
-        return v
+        let reader = ReaderView()
+        reader.found = found
+        return reader
     }
 
-    func updateNSView(_ v: ReaderView, context: Context) {}
+    func updateNSView(_ reader: ReaderView, context: Context) {}
 }

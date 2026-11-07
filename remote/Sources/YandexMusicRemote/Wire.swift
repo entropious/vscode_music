@@ -19,41 +19,41 @@ enum JSON: Codable, Sendable, Equatable {
     case object([String: JSON])
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if c.decodeNil() {
+        let container = try decoder.singleValueContainer()
+        if container.decodeNil() {
             self = .null
-        } else if let b = try? c.decode(Bool.self) {
-            self = .bool(b)
-        } else if let n = try? c.decode(Double.self) {
-            self = .number(n)
-        } else if let s = try? c.decode(String.self) {
-            self = .string(s)
-        } else if let a = try? c.decode([JSON].self) {
-            self = .array(a)
+        } else if let flag = try? container.decode(Bool.self) {
+            self = .bool(flag)
+        } else if let number = try? container.decode(Double.self) {
+            self = .number(number)
+        } else if let text = try? container.decode(String.self) {
+            self = .string(text)
+        } else if let items = try? container.decode([JSON].self) {
+            self = .array(items)
         } else {
-            self = .object(try c.decode([String: JSON].self))
+            self = .object(try container.decode([String: JSON].self))
         }
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
+        var container = encoder.singleValueContainer()
         switch self {
-        case .null: try c.encodeNil()
-        case let .bool(b): try c.encode(b)
-        case let .number(n): try c.encode(n)
-        case let .string(s): try c.encode(s)
-        case let .array(a): try c.encode(a)
-        case let .object(o): try c.encode(o)
+        case .null: try container.encodeNil()
+        case .bool(let flag): try container.encode(flag)
+        case .number(let number): try container.encode(number)
+        case .string(let text): try container.encode(text)
+        case .array(let items): try container.encode(items)
+        case .object(let fields): try container.encode(fields)
         }
     }
 
     subscript(key: String) -> JSON? {
-        if case let .object(o) = self { return o[key] }
+        if case .object(let fields) = self { return fields[key] }
         return nil
     }
 
     var array: [JSON] {
-        if case let .array(a) = self { return a }
+        if case .array(let items) = self { return items }
         return []
     }
 }
@@ -64,17 +64,17 @@ struct FlexibleID: Codable, Hashable, Sendable, CustomStringConvertible {
     var description: String { value }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.singleValueContainer()
-        if let n = try? c.decode(Int.self) {
-            value = String(n)
+        let container = try decoder.singleValueContainer()
+        if let number = try? container.decode(Int.self) {
+            value = String(number)
         } else {
-            value = try c.decode(String.self)
+            value = try container.decode(String.self)
         }
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.singleValueContainer()
-        try c.encode(value)
+        var container = encoder.singleValueContainer()
+        try container.encode(value)
     }
 }
 
@@ -137,33 +137,37 @@ enum Source: Codable, Sendable, Equatable {
     private enum Keys: String, CodingKey { case kind, id, name, playlist, query }
 
     init(from decoder: Decoder) throws {
-        let c = try decoder.container(keyedBy: Keys.self)
-        switch try c.decode(String.self, forKey: .kind) {
-        case "station": self = .station(id: try c.decode(String.self, forKey: .id), name: try c.decode(String.self, forKey: .name))
+        let container = try decoder.container(keyedBy: Keys.self)
+        switch try container.decode(String.self, forKey: .kind) {
+        case "station":
+            self = .station(
+                id: try container.decode(String.self, forKey: .id),
+                name: try container.decode(String.self, forKey: .name)
+            )
         case "liked": self = .liked
-        case "playlist": self = .playlist(try c.decode(Playlist.self, forKey: .playlist))
-        case "search": self = .search(query: try c.decode(String.self, forKey: .query))
+        case "playlist": self = .playlist(try container.decode(Playlist.self, forKey: .playlist))
+        case "search": self = .search(query: try container.decode(String.self, forKey: .query))
         default: self = .wave
         }
     }
 
     func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: Keys.self)
+        var container = encoder.container(keyedBy: Keys.self)
         switch self {
         case .wave:
-            try c.encode("wave", forKey: .kind)
-        case let .station(id, name):
-            try c.encode("station", forKey: .kind)
-            try c.encode(id, forKey: .id)
-            try c.encode(name, forKey: .name)
+            try container.encode("wave", forKey: .kind)
+        case .station(let id, let name):
+            try container.encode("station", forKey: .kind)
+            try container.encode(id, forKey: .id)
+            try container.encode(name, forKey: .name)
         case .liked:
-            try c.encode("liked", forKey: .kind)
-        case let .playlist(p):
-            try c.encode("playlist", forKey: .kind)
-            try c.encode(p, forKey: .playlist)
-        case let .search(query):
-            try c.encode("search", forKey: .kind)
-            try c.encode(query, forKey: .query)
+            try container.encode("liked", forKey: .kind)
+        case .playlist(let playlist):
+            try container.encode("playlist", forKey: .kind)
+            try container.encode(playlist, forKey: .playlist)
+        case .search(let query):
+            try container.encode("search", forKey: .kind)
+            try container.encode(query, forKey: .query)
         }
     }
 }
@@ -244,6 +248,6 @@ struct SharedState: Codable, Sendable, Equatable {
 func coverURL(_ uri: String?, _ size: Int) -> URL? {
     guard let uri, !uri.isEmpty else { return nil }
     if uri.hasPrefix("data:") { return URL(string: uri) }
-    let u = uri.replacingOccurrences(of: "%%", with: "\(size)x\(size)")
-    return URL(string: u.hasPrefix("http") ? u : "https://\(u)")
+    let sized = uri.replacingOccurrences(of: "%%", with: "\(size)x\(size)")
+    return URL(string: sized.hasPrefix("http") ? sized : "https://\(sized)")
 }
