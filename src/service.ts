@@ -6,7 +6,7 @@
  *
  *   ELECTRON_RUN_AS_NODE=1 <VS Code helper> out/service.js <socket> <helper/avplayer.js> <log file>
  *
- * The fullscreen remote app (remote/) starts it the same way, with its own Electron, when no
+ * The fullscreen remote app (remote/) starts it the same way, with the editor's Electron, when no
  * VS Code window has: the settings windows sent last are kept next to the log, and the token
  * in the login keychain, so a service started without a window can still play.
  */

@@ -1,7 +1,7 @@
 // @ts-check
 /**
  * Brings a DOM tree in line with a new one by changing only what differs, for the player panel
- * (media/player.js) and the fullscreen remote (remote/src/renderer/app.ts). What stays the same
+ * (media/player.js). What stays the same
  * keeps its nodes and their state: a click between press and release, focus and typing, an image
  * on show. Elements are matched in order by tag, or by id where they have one.
  */

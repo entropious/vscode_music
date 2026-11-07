@@ -227,7 +227,7 @@
     "watch": "tsc -watch -p ./",
     "test": "npm run compile && node ./out/test/runTest.js",
     "e2e": "npm run compile && node ./out/test/e2e.js",
-    "package": "vsce package --no-dependencies"
+    "package": "bash remote/scripts/build-app.sh && vsce package --no-dependencies"
   },
   "devDependencies": {
     "@types/mocha": "^10.0.6",

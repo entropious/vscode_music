@@ -61,32 +61,39 @@ node .probe/service-check.js   # service: two clients, playback survives one clo
 
 ## Fullscreen remote (macOS)
 
-`remote/` is Yandex Music Remote, an Electron app in TypeScript built with
-[Bun](https://bun.sh). It finds the player service's socket in the temp
-directory (`vscode-yandex-music-service-*.sock`), joins it with an `attach`
-message (a remote without settings: the token stays as the windows set it) and
-runs the same calls as a window. A connected app keeps the service running.
-The now-playing art (blurred cover background, cover placeholders, progress bar
-shapes, the cover's palette, and the record and breathing cover that only the app
-shows) is shared with the player panel: `media/nowArt.js` is bundled into the
-app, and `media/nowArt.css` and the placeholders are copied next to it.
-Both update their DOM with `media/patch.js`, which changes only the nodes that
-differ, never by replacing it wholesale (`innerHTML`, `replaceChildren`): a node
-replaced between a press and its release loses the click, and an input its focus.
-Clicks on list items go to one handler per list, which reads what the item is
-from its `data-*` attributes and takes the rest from the state at click time.
+`remote/` is Yandex Music Remote, a native macOS app in SwiftUI: a Swift package
+(`remote/Package.swift`, macOS 14+) with no dependencies. It finds the player
+service's socket in the temp directory (`vscode-yandex-music-service-*.sock`),
+joins it with an `attach` message (a remote without settings: the token stays as
+the windows set it) and runs the same calls as a window (`ServiceLink.swift`); the
+messages' types are in `Wire.swift`. A connected app keeps the service running.
+Tracks the app sends back (`playTracks`) go as the service sent them, raw JSON,
+with the fields the app doesn't read. The now-playing art follows the player
+panel's (`media/nowArt.js`): the palette and the progress bars' heights are worked
+out the same way (`Art.swift`), with the same 32-bit hashing, so a track looks the
+same in both.
 
-When no service answers, the app starts one itself (`remote/src/launch.ts`): it
-finds the newest copy of the extension in `~/.vscode/extensions` (or Insiders,
-Cursor, VSCodium, Windsurf), computes the socket the windows of that editor look
-at from its global storage folder, and runs the extension's `out/service.js`
-with its own Electron in Node mode. Such a service has no window to say hello,
+It is kept small in memory, some 60 MB with a video playing: the window is the app
+delegate's own and isn't restored (restoration keeps a picture of the whole
+window); images reach SwiftUI as `CGImage`s, decoded once by ImageIO (from an
+`NSImage` SwiftUI may render a new bitmap the size it shows it at); the background
+is blurred with vImage, since Core Image brings Metal and its caches.
+`YM_SNAPSHOT=<file.png>` makes the app save a picture of its window every few
+seconds, for checking its look without screen recording rights (it doesn't
+catch the video, which AVPlayer draws in its own layer).
+
+When no service answers, the app starts one itself (`Launch.swift`): it finds the
+newest copy of the extension in `~/.vscode/extensions` (or Insiders, Cursor,
+VSCodium, Windsurf), computes the socket the windows of that editor look at from
+its global storage folder, and runs the extension's `out/service.js` with that
+editor's own Electron in Node mode. Such a service has no window to say hello,
 so on every hello the service saves the window's settings to
 `service-settings.json` in the global storage and the token to the login
 keychain (`security`, item `vscode-yandex-music`, account `token-<socket id>`:
 one per VS Code profile, so the tests' service, with a profile of its own, never
-overwrites the user's token), and reads both when it starts. `YM_EXTENSION_DIR` and `YM_STORAGE_DIR` point the app at another copy,
-e.g. this repository after `npm run compile`.
+overwrites the user's token), and reads both when it starts. `YM_EXTENSION_DIR`,
+`YM_STORAGE_DIR` and `YM_NODE` (the Electron to run it with) point the app at
+another copy, e.g. this repository after `npm run compile`.
 
 The service looks up the visuals of the current and the next track
 (`src/visuals.ts`) while a remote app asks for them, and passes them in the shared
@@ -105,38 +112,31 @@ visible and stops when it is minimized or hidden; attaching alone asks for nothi
   and the artist's video for artists Yandex Music has none of: the artist's page,
   of which the wide one.
 
-The remote plays one of them (`remote/src/renderer/visuals.ts`): an MP4 or an
-HLS stream through hls.js's light build, or YouTube's embedded player, which
-refuses a page without a Referer (error 153), so the app sends its bundle ID as
-one. A full music video isn't reached yet: the Yandex Music API gives only a
-preview and a `playerId` for Yandex's video hosting. **Yandex Music: Save Video
-Info of the Current Track** saves the API's answers about the current track's
-videos to a JSON file in the global storage, to see what there is to play.
+The remote plays one of them with AVPlayer (`Video.swift`), which plays the MP4
+files and HLS streams as they are. A music video on YouTube is played from its
+video stream, which yt-dlp finds (`--get-url`, H.264 or HEVC up to 720p; a link
+is kept for an hour), and kept at the track's position; AVPlayer's buffer is held
+to 10 seconds, or it keeps all of such a plain MP4 in memory. Without yt-dlp those
+videos are left out. A full music video from Yandex isn't reached yet: the Yandex
+Music API gives only a preview and a `playerId` for Yandex's video hosting.
+**Yandex Music: Save Video Info of the Current Track** saves the API's answers
+about the current track's videos to a JSON file in the global storage, to see
+what there is to play.
 
 ```bash
 cd remote
-bun install
-bun run start      # build and open it; add -- --fullscreen to open it in full screen
-bun run package    # dist/Yandex Music Remote-darwin-{arm64,x64}/Yandex Music Remote.app
+swift run                    # build and open it; add --fullscreen to open it in full screen
+bash scripts/build-app.sh    # dist/Yandex Music Remote.app, for Apple silicon
 ```
 
-The app isn't signed: after copying it to `~/Applications`, where the extension
-looks for it, open it with right click → Open once, or run
-`xattr -dr com.apple.quarantine ~/Applications/"Yandex Music Remote.app"`.
-Users get it from `remote/scripts/install.sh`, which the extension runs in a
-terminal (Open Fullscreen Remote when the app isn't there, or Install Fullscreen
-Remote) at the tag of its own version: it installs Bun if needed, downloads
-`remote/` and `media/` at that tag, builds the app and puts it into
-`~/Applications`. `YM_REMOTE_SOURCE=<checkout> bash remote/scripts/install.sh`
-builds a local checkout the same way.
-The extension's **Open Fullscreen Remote** looks for the app in `~/Applications`
-only, where the install script puts it, so a build in a checkout doesn't count.
-It compares the version in the app's `Info.plist` (the extension's version it
-was built with) with its own and offers an update when the app is older.
-
-Without macOS and a token, run it against a stand-in service with a made-up
-queue: `bun run mock` in one terminal, `bun run start` in
-another. `--socket <path>` points the app at a socket of your choice.
+`npm run package` builds the app first and puts it into the extension's package
+(`remote/dist/`). The extension's **Install Fullscreen Remote** (and **Open
+Fullscreen Remote**, without asking, when the app isn't installed or came with an
+older version) copies it into `~/Applications` with `ditto`, takes it out of quarantine (it is
+signed only ad hoc), and installs yt-dlp with Homebrew when it isn't there.
+**Open Fullscreen Remote** looks for the app in `~/Applications` only, so a build
+in a checkout doesn't count, and compares the version in the app's `Info.plist`
+(the extension's version it came with) with its own.
 
 ## Endpoint settings
 

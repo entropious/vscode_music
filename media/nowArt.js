@@ -1,8 +1,8 @@
 // @ts-check
 /**
- * The now-playing art shared by the player panel (media/player.js) and the fullscreen remote
- * (remote/src/renderer/app.ts); its styles are in nowArt.css. Everything here is worked out
- * once per cover or track, so that the animations themselves are plain transforms.
+ * The now-playing art of the player panel (media/player.js); its styles are in nowArt.css.
+ * Everything here is worked out once per cover or track, so that the animations themselves are
+ * plain transforms.
  */
 
 /** @typedef {{ base: string, a: string, b: string }} Palette */

@@ -81,24 +81,21 @@ music closes, another one picks up from the same track and position.
 
 **Yandex Music Remote** is a separate fullscreen app for a big screen: a large
 cover with a spinning record, a background in the cover's colors, a waveform
-progress bar and controls you can hit from across the room. It plays nothing
-itself: it controls the player service that the extension runs on macOS, the
-same way a VS Code window does, and starts that service itself when it isn't
-running, so it works without VS Code open. The music keeps playing while the app
-is open, even after VS Code is closed.
+progress bar and controls you can hit from across the room. It is a native
+macOS app of a few megabytes, which takes some 60 MB of memory with a video
+playing. It plays nothing itself: it controls the player service that the
+extension runs on macOS, the same way a VS Code window does, and starts that
+service itself when it isn't running, so it works without VS Code open. The
+music keeps playing while the app is open, even after VS Code is closed.
 
 The `⛶` button in the player panel's title bar opens it, and so does **Yandex
 Music: Open Fullscreen Remote**. The extension has to be installed and signed in
-once. When the app isn't there yet, the button offers to install it: a terminal
-runs `remote/scripts/install.sh` of this version, which builds the app on your
-Mac from its source and puts it into `~/Applications`. That takes about 120 MB of
-downloads, mostly Electron, and a few minutes, and installs [Bun](https://bun.sh)
-if you have none. To update the app after the extension, run **Yandex Music:
-Install Fullscreen Remote**, or the script yourself:
-
-```
-curl -fsSL https://raw.githubusercontent.com/entropious/vscode_music/main/remote/scripts/install.sh | bash
-```
+once. The app comes with the extension: when it isn't installed yet, or came with
+an older version of the extension, the button installs it first, by itself: it
+copies it into `~/Applications`, takes it out of quarantine and opens it. **Yandex
+Music: Install Fullscreen Remote** installs it again. For music videos from YouTube
+the app needs [yt-dlp](https://github.com/yt-dlp/yt-dlp), which the install puts
+in with Homebrew when it isn't there; without it those videos are left out.
 
 | Key | Action |
 |---|---|
@@ -120,7 +117,8 @@ sound, in this order:
 1. its music video, which fills the background: a 30-second preview from the
    iTunes Store, or the video on YouTube that Wikidata or Genius links to,
    unless it is only the cover on a still frame (an auto-generated "Topic" or an
-   "Official Audio" upload);
+   "Official Audio" upload), played from its video stream (up to 720p), which
+   yt-dlp finds;
 2. the track's video shot, Yandex Music's short looping video, in the cover's
    place;
 3. the artist's background video from Yandex Music, or else the wide video on

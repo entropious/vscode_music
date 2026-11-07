@@ -1,7 +1,8 @@
 #!/bin/bash
-# Builds Yandex Music Remote.app into dist/: the release build of the Swift package, its
-# resources, the icon and an Info.plist with the extension's version, which the extension
-# compares with its own to offer an update.
+# Builds Yandex Music Remote.app into dist/, which the extension's package carries and installs
+# from: the release build of the Swift package for Apple silicon, its resources,
+# the icon and an Info.plist with the extension's version, which the extension compares with its
+# own to offer an update.
 #   bash scripts/build-app.sh
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -9,9 +10,10 @@ cd "$(dirname "$0")/.."
 NAME="Yandex Music Remote"
 EXE=YandexMusicRemote
 VERSION=$(sed -nE 's/^  "version": "([^"]+)".*/\1/p' ../package.json)
+ARCHS=(--arch arm64)
 
-swift build -c release --product "$EXE"
-BIN=$(swift build -c release --show-bin-path)
+swift build -c release "${ARCHS[@]}" --product "$EXE"
+BIN=$(swift build -c release "${ARCHS[@]}" --show-bin-path)
 
 APP="dist/$NAME.app"
 rm -rf "$APP"

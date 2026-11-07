@@ -1,6 +1,5 @@
-/* The now-playing art shared by the player panel (player.css) and the fullscreen remote
-   (remote/src/renderer/style.css): the background in the cover's colors, the record, the cover's
-   breathing. Each page sizes and places them. Only transforms and opacity
+/* The now-playing art of the player panel (player.css): the background in the cover's colors, the
+   record, the cover's breathing; player.css sizes and places them. Only transforms and opacity
    animate; the blur is baked into the cover image (blurredOf in nowArt.js). The record and the
    cover move only under an ancestor with the class `playing`.
    The endless animations move in steps of 1/30 s (their durations are whole numbers of steps),

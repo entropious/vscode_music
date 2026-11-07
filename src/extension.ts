@@ -9,9 +9,9 @@ import { ServiceClient } from './serviceClient';
 import { PlayerSync } from './sync';
 
 const REMOTE_APP = 'Yandex Music Remote.app';
-const REMOTE_DOCS = 'https://github.com/entropious/vscode_music#fullscreen-remote-macos';
-/** The repository whose remote/scripts/install.sh builds and installs the remote. */
-const REMOTE_REPO = 'entropious/vscode_music';
+/** Where Homebrew may be, which installs yt-dlp for the remote's music videos from YouTube. */
+const BREW = ['/opt/homebrew/bin/brew', '/usr/local/bin/brew'];
+const YT_DLP = ['/opt/homebrew/bin/yt-dlp', '/usr/local/bin/yt-dlp', `${process.env.HOME ?? ''}/.local/bin/yt-dlp`];
 /** The Genius API token in VS Code's secret storage; the player service keeps its own copy in the login keychain. */
 const GENIUS_SECRET = 'geniusToken';
 
@@ -68,7 +68,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
 
   /**
    * Where Yandex Music Remote, the fullscreen app in `remote/`, is installed on macOS: in
-   * ~/Applications, where the install script puts it. A copy anywhere else, such as a build in a
+   * ~/Applications, where the extension copies it. A copy anywhere else, such as a build in a
    * checkout, doesn't count.
    */
   const findRemote = (): string | undefined => {
@@ -100,7 +100,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     vscode.window.showInformationMessage(token.trim() ? 'Genius token saved.' : 'Genius token removed.');
   };
 
-  /** The version of the extension the installed remote was built with (see remote/scripts/package.ts). */
+  /** The version of the extension the installed remote came with (see remote/scripts/build-app.sh). */
   const remoteVersion = (app: string) =>
     new Promise<string | undefined>((resolve) =>
       execFile('plutil', ['-extract', 'CFBundleShortVersionString', 'raw', '-o', '-', `${app}/Contents/Info.plist`], (err, out) => resolve(err ? undefined : out.trim())),
@@ -122,64 +122,81 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
   };
 
   /**
-   * Opens the fullscreen remote; it starts the player service itself if no window has. A remote
-   * built with an older version of the extension is offered an update first.
+   * Opens the fullscreen remote; it starts the player service itself if no window has. The remote
+   * that comes with this extension is installed first, without asking, when there is none or the
+   * one there came with an older version of the extension.
    */
   const openRemote = async () => {
     const app = findRemote();
-    if (!app) {
-      const install = 'Install';
-      const more = 'Learn More';
-      const choice = await vscode.window.showInformationMessage(
-        "Yandex Music Remote, the fullscreen app that controls this player, isn't installed. Install it? It is built on this Mac: about 120 MB to download and a few minutes. Bun is installed too if you don't have it.",
-        install,
-        more,
-      );
-      if (choice === install) {
-        installRemote();
-      } else if (choice === more) {
-        void vscode.env.openExternal(vscode.Uri.parse(REMOTE_DOCS));
-      }
+    if (!app || older(await remoteVersion(app), String(context.extension.packageJSON.version))) {
+      await installRemote();
       return;
     }
-    const version = String(context.extension.packageJSON.version);
-    const built = await remoteVersion(app);
-    if (older(built, version)) {
-      const update = 'Update';
-      const open = 'Open Anyway';
-      const choice = await vscode.window.showInformationMessage(
-        `Yandex Music Remote was built with ${built && /^\d+(\.\d+)*$/.test(built) ? `version ${built} of this extension` : 'an older version of this extension'}, and this one is ${version}. Update it? It is built again on this Mac in a minute or two.`,
-        update,
-        open,
-      );
-      if (choice === update) {
-        installRemote();
-        return;
-      }
-      if (choice !== open) {
-        return;
-      }
-    }
-    // `open` passes its environment on to the app, and VS Code's ELECTRON_RUN_AS_NODE would start
-    // the app's Electron as plain Node, which quits at once.
-    const env = Object.fromEntries(Object.entries(process.env).filter(([k]) => !k.startsWith('ELECTRON_')));
-    const opened = await new Promise<boolean>((resolve) => execFile('open', [app], { env }, (err) => resolve(!err)));
-    if (!opened) {
+    await launchRemote(app);
+  };
+
+  const run = (file: string, args: string[]) =>
+    new Promise<string | undefined>((resolve) => execFile(file, args, (err, out) => resolve(err ? undefined : String(out))));
+
+  const launchRemote = async (app: string) => {
+    if ((await run('open', [app])) === undefined) {
       vscode.window.showErrorMessage(`Couldn't open Yandex Music Remote at ${app}.`);
     }
   };
 
-  /** Builds and installs the remote in a terminal, with the install script of this version's tag. */
-  const installRemote = () => {
-    const ref = `v${String(context.extension.packageJSON.version)}`;
-    const script = `https://raw.githubusercontent.com/${REMOTE_REPO}/${ref}/remote/scripts/install.sh`;
-    const terminal = vscode.window.createTerminal({
-      name: 'Yandex Music Remote',
-      shellPath: '/bin/bash',
-      shellArgs: ['-c', `curl -fsSL '${script}' | bash -s -- '${ref}'; echo; read -n 1 -s -r -p 'Press any key to close.'`],
-      env: { ELECTRON_RUN_AS_NODE: null },
+  /**
+   * Installs the remote that comes with this extension into ~/Applications, takes it out of
+   * quarantine and opens it. yt-dlp, which finds the streams of music videos on YouTube, is
+   * installed with Homebrew if it isn't there.
+   */
+  const installRemote = async () => {
+    if (process.platform !== 'darwin') {
+      vscode.window.showInformationMessage('Yandex Music Remote runs on macOS.');
+      return;
+    }
+    const source = context.asAbsolutePath(`remote/dist/${REMOTE_APP}`);
+    if (!fs.existsSync(source)) {
+      vscode.window.showErrorMessage('This build of the extension came without Yandex Music Remote.');
+      return;
+    }
+    const dir = `${process.env.HOME ?? ''}/Applications`;
+    const app = `${dir}/${REMOTE_APP}`;
+    const installed = await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Installing Yandex Music Remote' }, async () => {
+      await fs.promises.mkdir(dir, { recursive: true });
+      await fs.promises.rm(app, { recursive: true, force: true });
+      if ((await run('ditto', [source, app])) === undefined) {
+        return false;
+      }
+      await run('xattr', ['-dr', 'com.apple.quarantine', app]);
+      // An extension's files may lose the executable bit on the way.
+      await run('chmod', ['+x', `${app}/Contents/MacOS/YandexMusicRemote`]);
+      return true;
     });
-    terminal.show();
+    if (!installed) {
+      vscode.window.showErrorMessage(`Couldn't install Yandex Music Remote into ${dir}.`);
+      return;
+    }
+    await installYtDlp();
+    await launchRemote(app);
+  };
+
+  /** yt-dlp for the remote's music videos from YouTube; without it they are left out. */
+  const installYtDlp = async () => {
+    if (YT_DLP.some((p) => fs.existsSync(p))) {
+      return;
+    }
+    const brew = BREW.find((p) => fs.existsSync(p));
+    if (!brew) {
+      vscode.window.showInformationMessage('Install yt-dlp (with Homebrew: brew install yt-dlp) for music videos from YouTube in Yandex Music Remote.');
+      return;
+    }
+    const done = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Installing yt-dlp with Homebrew, for music videos from YouTube' },
+      () => run(brew, ['install', 'yt-dlp']),
+    );
+    if (done === undefined) {
+      vscode.window.showWarningMessage("Homebrew couldn't install yt-dlp; music videos from YouTube are left out. Try brew install yt-dlp in a terminal.");
+    }
   };
 
   const guard =
@@ -254,7 +271,7 @@ export function activate(context: vscode.ExtensionContext): ExtensionApi {
     // Clicking a status bar item leaves it focused, and showHover shows the focused
     // item's tooltip, which is the mini player card.
     vscode.commands.registerCommand('yandexMusic.openRemote', guard(openRemote)),
-    vscode.commands.registerCommand('yandexMusic.installRemote', installRemote),
+    vscode.commands.registerCommand('yandexMusic.installRemote', guard(installRemote)),
     vscode.commands.registerCommand('yandexMusic.setGeniusToken', guard(setGeniusToken)),
     vscode.commands.registerCommand('yandexMusic.showCard', () => vscode.commands.executeCommand('workbench.action.showHover')),
     vscode.commands.registerCommand('yandexMusic.playPause', guard(() => player.playPause())),

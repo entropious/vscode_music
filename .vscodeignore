@@ -10,4 +10,11 @@ DEVELOPMENT.md
 node_modules/**
 tsconfig.json
 **/*.map
-remote/**
+.vscode/**
+remote/.build/**
+remote/.swiftpm/**
+remote/Sources/**
+remote/scripts/**
+remote/build/**
+remote/Package.swift
+remote/.gitignore
