@@ -190,8 +190,8 @@ struct ArtView: View {
             Color(hex: "#1B1D24")
             if let cover {
                 Image(bitmap: cover).resizable().aspectRatio(contentMode: .fill)
-            } else if let empty = resourceImage(model.current == nil ? "cover-empty.svg" : "cover-loading.svg") {
-                Image(nsImage: empty).resizable().aspectRatio(contentMode: .fill)
+            } else {
+                CoverPlaceholder(loading: model.current != nil)
             }
             if videos.place == .tile, let player = videos.player {
                 PlayerLayerView(player: player, gravity: .resizeAspectFill)
@@ -202,6 +202,50 @@ struct ArtView: View {
         .clipShape(RoundedRectangle(cornerRadius: 22, style: .continuous))
         .shadow(color: .black.opacity(0.55), radius: 40, y: 32)
         .shadow(color: palette.primary.opacity(0.33), radius: 70)
+    }
+}
+
+/// The cover's place while there is none: the tile's grooves and My Vibe's wave in the middle.
+/// While a cover loads, a yellow dash runs along the wave, as `stroke-dashoffset` ran it in the SVG
+/// (CoreSVG draws the SVG's shapes but neither its CSS transforms nor its animations).
+struct CoverPlaceholder: View {
+    let loading: Bool
+    /// The dash's share of the wave and the time it takes to run along it.
+    private static let dash = 0.34
+    private static let period = 1.3
+
+    var body: some View {
+        GeometryReader { geometry in
+            let wave = min(geometry.size.width, geometry.size.height) * 0.38
+            let stroke = StrokeStyle(lineWidth: wave / 24 * 2.2, lineCap: .round)
+            let dashStroke = StrokeStyle(lineWidth: wave / 24 * 2.4, lineCap: .round)
+            ZStack {
+                if let tile = resourceImage(loading ? "cover-loading.svg" : "cover-empty.svg") {
+                    Image(nsImage: tile).resizable()
+                }
+                WaveShape()
+                    .stroke(.white.opacity(loading ? 0.16 : 0.34), style: stroke)
+                    .frame(width: wave, height: wave)
+                if loading {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30)) { context in
+                        let time = context.date.timeIntervalSinceReferenceDate
+                        let start = time.truncatingRemainder(dividingBy: Self.period) / Self.period
+                        let end = start + Self.dash
+                        ZStack {
+                            WaveShape().trim(from: start, to: min(end, 1))
+                                .stroke(Color.accent, style: dashStroke)
+                            if end > 1 {
+                                WaveShape().trim(from: 0, to: end - 1)
+                                    .stroke(Color.accent, style: dashStroke)
+                            }
+                        }
+                        .shadow(color: Color.accent.opacity(0.6), radius: wave / 24)
+                    }
+                    .frame(width: wave, height: wave)
+                }
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height)
+        }
     }
 }
 
@@ -478,7 +522,8 @@ struct DockView: View {
         HStack(spacing: metrics.dockGap) {
             round(
                 metrics.small,
-                systemImage: "nosign",
+                glyph: .dislike,
+                share: 0.4,
                 fill: disliked ? .white.opacity(0.26) : .white.opacity(0.10),
                 color: disliked ? .white : .white.opacity(0.82),
                 help: disliked ? "Remove dislike" : "Dislike and skip",
@@ -487,16 +532,20 @@ struct DockView: View {
             .disabled(track == nil)
             round(
                 metrics.side,
-                systemImage: "backward.end.fill",
+                glyph: .previous,
+                share: 0.38,
                 fill: .white.opacity(0.14),
                 color: .white,
                 help: "Previous track",
                 action: model.previous
             )
             Button(action: model.playPause) {
-                Image(systemName: model.status.playing ? "pause.fill" : "play.fill")
-                    .font(.system(size: metrics.play * 0.36, weight: .bold))
-                    .offset(x: model.status.playing ? 0 : metrics.play * 0.035)
+                GlyphView(glyph: model.status.playing ? .pause : .play)
+                    .frame(
+                        width: metrics.play * (model.status.playing ? 0.38 : 0.4),
+                        height: metrics.play * (model.status.playing ? 0.38 : 0.4)
+                    )
+                    .offset(x: model.status.playing ? 0 : metrics.play * 0.07)
                     .foregroundStyle(Color.ink)
                     .frame(width: metrics.play, height: metrics.play)
                     .background(Color.accent, in: Circle())
@@ -506,15 +555,16 @@ struct DockView: View {
             .help(model.status.playing ? "Pause" : "Play")
             round(
                 metrics.side,
-                systemImage: "forward.end.fill",
+                glyph: .next,
+                share: 0.38,
                 fill: .white.opacity(0.14),
                 color: .white,
                 help: "Next track",
                 action: model.nextTrack
             )
             Button(action: model.like) {
-                Image(systemName: liked ? "heart.fill" : "heart")
-                    .font(.system(size: metrics.small * 0.4, weight: .medium))
+                GlyphView(glyph: liked ? .heartFilled : .heart)
+                    .frame(width: metrics.small * 0.46, height: metrics.small * 0.46)
                     .foregroundStyle(liked ? Color.ai : .white.opacity(0.82))
                     .keyframeAnimator(initialValue: 1.0, trigger: model.heartBeat) { heart, scale in
                         heart.scaleEffect(scale)
@@ -537,11 +587,12 @@ struct DockView: View {
             Rectangle().fill(.white.opacity(0.16)).frame(width: 1, height: 64).padding(.horizontal, 4)
             HStack(spacing: 10) {
                 square(
-                    systemImage: muted ? "speaker.slash" : "speaker.wave.2",
+                    glyph: muted ? .muted : .audible,
+                    side: 28,
                     help: muted ? "Unmute" : "Mute",
                     action: model.toggleMute
                 )
-                square(systemImage: "minus", help: "Volume down") { model.stepVolume(-PlayerModel.volumeStep) }
+                square(glyph: .minus, side: 26, help: "Volume down") { model.stepVolume(-PlayerModel.volumeStep) }
                 VStack(spacing: 8) {
                     Text(volume.map { String(Int(($0 * 100).rounded())) } ?? "—").font(Fonts.mono(22))
                     GeometryReader { geometry in
@@ -556,7 +607,7 @@ struct DockView: View {
                     .frame(height: 10)
                 }
                 .frame(width: metrics.meter)
-                square(systemImage: "plus", help: "Volume up") { model.stepVolume(PlayerModel.volumeStep) }
+                square(glyph: .plus, side: 26, help: "Volume up") { model.stepVolume(PlayerModel.volumeStep) }
             }
         }
         .padding(.vertical, 16)
@@ -571,15 +622,16 @@ struct DockView: View {
 
     private func round(
         _ size: CGFloat,
-        systemImage: String,
+        glyph: Glyph,
+        share: CGFloat,
         fill: Color,
         color: Color,
         help: String,
         action: @escaping () -> Void
     ) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: size * 0.32, weight: .semibold))
+            GlyphView(glyph: glyph)
+                .frame(width: size * share, height: size * share)
                 .foregroundStyle(color)
                 .frame(width: size, height: size)
                 .chip(Circle(), base: fill, hover: .white.opacity(0.2))
@@ -588,10 +640,10 @@ struct DockView: View {
         .help(help)
     }
 
-    private func square(systemImage: String, help: String, action: @escaping () -> Void) -> some View {
+    private func square(glyph: Glyph, side: CGFloat, help: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 22, weight: .semibold))
+            GlyphView(glyph: glyph)
+                .frame(width: side, height: side)
                 .frame(width: metrics.square, height: metrics.square)
                 .chip(RoundedRectangle(cornerRadius: 20), base: .white.opacity(0.10), hover: .white.opacity(0.18))
         }

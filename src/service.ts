@@ -433,8 +433,9 @@ async function execute(socket: net.Socket, m: Message): Promise<void> {
       return;
     case 'adopt':
       if (core.index < 0 && m.state.index >= 0) {
-        // The service keeps its own My Vibe settings: the window's are those of when it last played.
-        core.applySharedState({ ...m.state, waveSettings: core.waveSettings });
+        // The service keeps its own My Vibe settings and volume: the window's are those of when it
+        // last played, and the music plays at the service's volume.
+        core.applySharedState({ ...m.state, volume: core.volume, waveSettings: core.waveSettings });
         core.applyPlaybackStatus({ ...m.status, playing: false });
         log.info(`service: took over a queue of ${m.state.queue.length} tracks`);
       }

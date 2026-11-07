@@ -81,6 +81,9 @@ struct WindowContent: View {
                 keepAwake(playing && model.link == .connected)
             }
             .onChange(of: model.status) { videos.keepInStep() }
+            .onChange(of: model.videoFront) { _, front in
+                if front, model.showsVideoInFront { rest() }
+            }
             .onAppear {
                 videos.onPlace = { model.videoPlace = $0 }
                 videos.position = { model.position(at: Date()) }
@@ -182,9 +185,15 @@ struct WindowContent: View {
         idleTask = Task {
             try? await Task.sleep(for: Self.idleAfter)
             guard !Task.isCancelled else { return }
-            idle = true
-            NSCursor.setHiddenUntilMouseMoves(true)
+            rest()
         }
+    }
+
+    /// Fades the player out over the video, or the pointer alone, at once.
+    private func rest() {
+        idleTask?.cancel()
+        idle = true
+        NSCursor.setHiddenUntilMouseMoves(true)
     }
 
     /// A click anywhere outside the drawer closes it, and does what it does there too. The
