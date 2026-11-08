@@ -545,7 +545,8 @@ struct DockView: View {
                         width: metrics.play * (model.status.playing ? 0.38 : 0.4),
                         height: metrics.play * (model.status.playing ? 0.38 : 0.4)
                     )
-                    .offset(x: model.status.playing ? 0 : metrics.play * 0.07)
+                    // `margin-left: 7%` of a centered icon: half of it moves the icon.
+                    .offset(x: model.status.playing ? 0 : metrics.play * 0.035)
                     .foregroundStyle(Color.ink)
                     .frame(width: metrics.play, height: metrics.play)
                     .background(Color.accent, in: Circle())
