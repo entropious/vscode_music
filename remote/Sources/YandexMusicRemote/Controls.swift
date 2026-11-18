@@ -21,6 +21,7 @@ struct Metrics {
     var dockGap: CGFloat { drawerOpen ? clamp(8, 1 * vw, 20) : clamp(12, 1.6 * vw, 24) }
     var drawer: CGFloat { clamp(360, 32 * vw, 500) }
     var gutter: CGFloat { clamp(16, 2.8 * vw, 40) }
+    var clock: CGFloat { clamp(64, 7.2 * vw, 116) }
     var nowGap: CGFloat { clamp(32, 4.4 * vw, 72) }
     var titleMax: CGFloat { clamp(48, 6.4 * vw, 124) }
     var artist: CGFloat { clamp(22, 2.3 * vw, 40) }

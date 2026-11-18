@@ -63,7 +63,7 @@ struct RootView: View {
                 if model.drawerOpen {
                     DrawerView()
                         .frame(width: min(metrics.drawer, geometry.size.width - 24))
-                        .padding(.top, 96)
+                        .padding(.top, TopBar.height)
                         .padding(.trailing, metrics.drawerInset)
                         .padding(.bottom, metrics.drawerInset)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
@@ -136,16 +136,12 @@ struct TopBar: View {
     @Environment(VideoStage.self) private var videos
     let frames: Frames
     let metrics: Metrics
+    static let height: CGFloat = 120
 
     var body: some View {
-        HStack(spacing: 16) {
-            HStack(spacing: 14) {
-                if let glyph = resourceImage("glyph.svg") {
-                    Image(nsImage: glyph).resizable().frame(width: 44, height: 44)
-                }
-                Text("Yandex Music").font(Fonts.sans(22, .semibold)).lineLimit(1)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
+        HStack(alignment: .top, spacing: 16) {
+            ClockView(size: metrics.clock)
+                .frame(maxWidth: .infinity, alignment: .leading)
             pills
             HStack(spacing: 12) {
                 Button {
@@ -179,9 +175,10 @@ struct TopBar: View {
             }
             .frame(maxWidth: .infinity, alignment: .trailing)
         }
-        .padding(.vertical, 16)
+        .padding(.top, 40)
+        .padding(.bottom, 16)
         .padding(.horizontal, metrics.gutter)
-        .frame(minHeight: 96)
+        .frame(minHeight: TopBar.height)
         .background(WindowDragArea())
     }
 

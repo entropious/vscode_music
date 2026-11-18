@@ -3,17 +3,22 @@
 # from: the release build of the Swift package for Apple silicon, its resources,
 # the icon and an Info.plist with the extension's version, which the extension compares with its
 # own to offer an update.
-#   bash scripts/build-app.sh
+#   bash scripts/build-app.sh [--personal]
+# --personal builds the author's own variant (the PERSONAL condition in the code), which is
+# installed locally and never released.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
 NAME="Yandex Music Remote"
 EXE=YandexMusicRemote
 VERSION=$(sed -nE 's/^  "version": "([^"]+)".*/\1/p' ../package.json)
-ARCHS=(--arch arm64)
+FLAGS=(-c release --arch arm64)
+if [ "${1:-}" = "--personal" ]; then
+    FLAGS+=(-Xswiftc -DPERSONAL)
+fi
 
-swift build -c release "${ARCHS[@]}" --product "$EXE"
-BIN=$(swift build -c release "${ARCHS[@]}" --show-bin-path)
+swift build "${FLAGS[@]}" --product "$EXE"
+BIN=$(swift build "${FLAGS[@]}" --show-bin-path)
 
 APP="dist/$NAME.app"
 rm -rf "$APP"

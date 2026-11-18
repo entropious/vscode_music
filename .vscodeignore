@@ -18,3 +18,5 @@ remote/scripts/**
 remote/build/**
 remote/Package.swift
 remote/.gitignore
+remote/.swift-format
+scripts/**
