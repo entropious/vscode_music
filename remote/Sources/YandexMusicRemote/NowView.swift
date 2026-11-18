@@ -303,7 +303,8 @@ struct InfoView: View {
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
                 sourceLine
-                let text = track?.fullTitle ?? "Nothing is playing"
+                // The artist in large letters, the track's title under it.
+                let text = track?.artistLine ?? "Nothing is playing"
                 let fit =
                     titleWidth > 0
                     ? fitTitle(text, width: titleWidth, full: metrics.titleMax) : (size: metrics.titleMax, lines: 2)
@@ -319,7 +320,7 @@ struct InfoView: View {
                     } action: {
                         titleWidth = $0
                     }
-                Text(track?.artistLine ?? "Start My Vibe or Liked above")
+                Text(track?.fullTitle ?? "Start My Vibe or Liked above")
                     .font(Fonts.sans(metrics.artist))
                     .foregroundStyle(.white.opacity(0.78))
                     .lineLimit(1)
