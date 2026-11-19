@@ -7,9 +7,9 @@ enum ClockPhase {
     /// The minutes of the day at which the clock turns orange and red, and back to white; a build
     /// with `scripts/build-app.sh --personal` keeps its author's own hours.
     #if PERSONAL
-    private static let eveningStart = 22 * 60 + 30
-    private static let nightStart = 23 * 60
-    private static let dayStart = 0
+    private static let eveningStart = 10 * 60 + 30
+    private static let nightStart = 11 * 60
+    private static let dayStart = 12 * 60
     #else
     private static let eveningStart = 21 * 60
     private static let nightStart = 23 * 60
