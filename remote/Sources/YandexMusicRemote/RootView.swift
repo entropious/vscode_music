@@ -139,10 +139,12 @@ struct TopBar: View {
     static let height: CGFloat = 120
 
     var body: some View {
-        HStack(alignment: .top, spacing: 16) {
+        // The pills sit halfway between the clock and the buttons on the right.
+        HStack(alignment: .top, spacing: 0) {
             ClockView(size: metrics.clock)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            Spacer(minLength: 16)
             pills
+            Spacer(minLength: 16)
             HStack(spacing: 12) {
                 Button {
                     model.openDrawer(!model.drawerOpen)
@@ -173,7 +175,6 @@ struct TopBar: View {
                         .help(account.login)
                 }
             }
-            .frame(maxWidth: .infinity, alignment: .trailing)
         }
         .padding(.top, 40)
         .padding(.bottom, 16)
