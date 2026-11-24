@@ -65,8 +65,7 @@ enum Glyph: CaseIterable {
             [Part(path: line((5, 12), (19, 12)), stroke: 2.4)]
         case .plus:
             [Part(path: line((12, 5), (12, 19)), stroke: 2.4),
-             Part(path: line((5, 12), (19, 12)), stroke: 2.4)]
-        }
+             Part(path: line((5, 12), (19, 12)), stroke: 2.4)]        }
     }
 }
 

@@ -57,7 +57,6 @@ struct WindowContent: View {
     @Environment(VideoStage.self) private var videos
     @State private var window: NSWindow?
     @State private var frames = Frames()
-    @State private var idle = false
     @State private var idleTask: Task<Void, Never>?
     @State private var monitors: [Any] = []
     @State private var awake: IOPMAssertionID?
@@ -65,7 +64,7 @@ struct WindowContent: View {
     private let reduceMotion = NSWorkspace.shared.accessibilityDisplayShouldReduceMotion
 
     var body: some View {
-        RootView(frames: frames, idle: idle)
+        RootView(frames: frames)
             .background(
                 WindowReader { hostWindow in
                     guard window == nil else { return }
@@ -180,7 +179,6 @@ struct WindowContent: View {
 
     /// The pointer hides after a few idle seconds, as in a video player.
     private func wake() {
-        if idle { idle = false }
         idleTask?.cancel()
         idleTask = Task {
             try? await Task.sleep(for: Self.idleAfter)
@@ -189,10 +187,9 @@ struct WindowContent: View {
         }
     }
 
-    /// Fades the player out over the video, or the pointer alone, at once.
+    /// Hides the pointer at once, until it moves.
     private func rest() {
         idleTask?.cancel()
-        idle = true
         NSCursor.setHiddenUntilMouseMoves(true)
     }
 

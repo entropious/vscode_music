@@ -31,6 +31,16 @@ struct Metrics {
     var times: CGFloat { clamp(18, 1.6 * vw, 26) }
     var bottom: CGFloat { clamp(16, 2.6 * vh, 32) }
     var drawerInset: CGFloat { clamp(12, 1.8 * vw, 24) }
+
+    // The clip mode's sizes, with the video in front.
+    var clipTitle: CGFloat { clamp(32, 3.8 * vw, 64) }
+    var clipSubtitle: CGFloat { clamp(18, 1.8 * vw, 30) }
+    var clipSource: CGFloat { clamp(15, 1.25 * vw, 19) }
+    var clipTimes: CGFloat { clamp(16, 1.5 * vw, 22) }
+    var clipBarGap: CGFloat { clamp(2, 0.3 * vw, 5) }
+    var clipDockGap: CGFloat { clamp(10, 1.3 * vw, 20) }
+    var clipMeter: CGFloat { clamp(90, 9 * vw, 150) }
+    var clipBottom: CGFloat { clamp(16, 2.8 * vh, 32) }
 }
 
 /// The wave of My Vibe: `M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0` in a 24×24 box.

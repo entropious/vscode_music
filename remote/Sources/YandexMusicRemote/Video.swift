@@ -88,6 +88,8 @@ final class VideoStage {
     private(set) var place: VideoPlace?
     /// The video has started playing; it fades in then.
     private(set) var shown = false
+    /// The video's picture size, once it is known.
+    private(set) var size: CGSize = .zero
     var onPlace: (VideoPlace?) -> Void = { _ in }
 
     /// A video on YouTube drifts this far from the track before it is put back in step.
@@ -165,6 +167,7 @@ final class VideoStage {
         player?.replaceCurrentItem(with: nil)
         player = nil
         shown = false
+        size = .zero
         inStep = false
         setPlace(nil)
     }
@@ -191,6 +194,7 @@ final class VideoStage {
                     switch item.status {
                     case .readyToPlay:
                         let size = item.presentationSize
+                        self.size = size
                         let wide = background || (size.height > 0 && size.width / size.height > 1.2)
                         self.setPlace(wide ? .background : .tile)
                         if self.inStep {

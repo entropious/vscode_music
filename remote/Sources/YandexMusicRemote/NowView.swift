@@ -13,7 +13,6 @@ struct BackgroundView: View {
     @Environment(VideoStage.self) private var videos
     let palette: Palette
     let blurred: NSImage?
-    let idle: Bool
 
     var body: some View {
         GeometryReader { geometry in
@@ -23,7 +22,16 @@ struct BackgroundView: View {
             let front = model.showsVideoInFront
             // Every layer is placed by its center in the window, so none of them sizes the others.
             ZStack {
-                (front ? Color.black : palette.base)
+                (front ? Color(hex: "#07060B") : palette.base)
+                if front {
+                    // The cover's colors glow around the video, where it doesn't fill the window.
+                    EllipticalGradient(colors: [palette.primary.opacity(0.34), .clear], endRadiusFraction: 0.5)
+                        .frame(width: width * 0.96, height: height * 0.77)
+                        .position(x: width / 2, y: height * 0.42)
+                    EllipticalGradient(colors: [palette.secondary.opacity(0.3), .clear], endRadiusFraction: 0.5)
+                        .frame(width: width * 1.07, height: height * 0.89)
+                        .position(x: width / 2, y: height * 0.7)
+                }
                 Group {
                     if let blurred {
                         // Past the window's edges, as `inset: -18%` did, so the soft edges don't show.
@@ -58,13 +66,16 @@ struct BackgroundView: View {
                 }
                 .opacity(front ? 0 : 1)
                 if videos.place == .background {
+                    // In front, a video wider than the window keeps to its top: the bars it
+                    // leaves go to the bottom, under the player.
+                    let size = videos.size
+                    let videoHeight =
+                        front && size.width > 0 ? min(height, width * size.height / size.width) : height
                     backgroundVideo(front: front)
-                        .frame(width: width, height: height)
-                        .position(x: width / 2, y: height / 2)
+                        .frame(width: width, height: videoHeight)
+                        .position(x: width / 2, y: videoHeight / 2)
                 }
-                vignette
-                    .opacity(front && idle ? 0 : 1)
-                    .animation(.easeInOut(duration: 0.4), value: idle)
+                if front { clipShades } else { vignette }
             }
             .frame(width: width, height: height)
             .clipped()
@@ -79,6 +90,34 @@ struct BackgroundView: View {
             PlayerLayerView(player: player, gravity: front ? .resizeAspect : .resizeAspectFill)
                 .opacity(videos.shown ? (front ? 1 : 0.85) : 0)
                 .animation(.easeInOut(duration: 0.8), value: videos.shown)
+        }
+    }
+
+    /// In the clip mode, the shade under the clock on top and under the player at the bottom.
+    private var clipShades: some View {
+        let shade = Color(red: 5 / 255, green: 4 / 255, blue: 10 / 255)
+        return VStack(spacing: 0) {
+            LinearGradient(
+                stops: [
+                    .init(color: shade.opacity(0.62), location: 0),
+                    .init(color: shade.opacity(0.25), location: 0.55),
+                    .init(color: shade.opacity(0), location: 1),
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 240)
+            Spacer(minLength: 0)
+            LinearGradient(
+                stops: [
+                    .init(color: shade.opacity(0.88), location: 0),
+                    .init(color: shade.opacity(0.6), location: 0.45),
+                    .init(color: shade.opacity(0), location: 1),
+                ],
+                startPoint: .bottom,
+                endPoint: .top
+            )
+            .frame(height: 380)
         }
     }
 
@@ -302,7 +341,7 @@ struct InfoView: View {
         let track = model.current
         VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 12) {
-                sourceLine
+                SourceLine(size: metrics.source)
                 // The artist in large letters, the track's title under it.
                 let text = track?.artistLine ?? "Nothing is playing"
                 let fit =
@@ -340,38 +379,6 @@ struct InfoView: View {
             }
         }
         .frame(minWidth: 360, maxWidth: 860, alignment: .leading)
-    }
-
-    @ViewBuilder private var sourceLine: some View {
-        let track = model.current
-        let mark = track.flatMap { model.aiMark($0) }
-        let label = track == nil ? "" : model.sourceLabel
-        if mark != nil || !label.isEmpty {
-            HStack(spacing: 12) {
-                if let mark {
-                    Text(mark.badge)
-                        .font(Fonts.sans(metrics.source * 0.82, .semibold))
-                        .foregroundStyle(Color(hex: "#FF7A5E"))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 1)
-                        .background(
-                            Color(red: 20 / 255, green: 10 / 255, blue: 8 / 255).opacity(0.35),
-                            in: RoundedRectangle(cornerRadius: 8)
-                        )
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.ai, lineWidth: 2))
-                        .help(mark.help)
-                }
-                switch model.state?.source {
-                case .wave, .station:
-                    WaveIcon(lineWidth: 2.3).frame(width: metrics.source * 1.3, height: metrics.source * 1.3)
-                default:
-                    EmptyView()
-                }
-                Text(label).lineLimit(1)
-            }
-            .font(Fonts.sans(metrics.source, .semibold))
-            .foregroundStyle(Color.accent)
-        }
     }
 
     private var extras: some View {
@@ -414,49 +421,101 @@ struct InfoView: View {
     }
 }
 
+/// The yellow line over the artist: the AI badge, the wave of My Vibe or a station, and the source.
+struct SourceLine: View {
+    @Environment(PlayerModel.self) private var model
+    let size: CGFloat
+
+    var body: some View {
+        let track = model.current
+        let mark = track.flatMap { model.aiMark($0) }
+        let label = track == nil ? "" : model.sourceLabel
+        if mark != nil || !label.isEmpty {
+            HStack(spacing: 12) {
+                if let mark {
+                    Text(mark.badge)
+                        .font(Fonts.sans(size * 0.82, .semibold))
+                        .foregroundStyle(Color(hex: "#FF7A5E"))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 1)
+                        .background(
+                            Color(red: 20 / 255, green: 10 / 255, blue: 8 / 255).opacity(0.35),
+                            in: RoundedRectangle(cornerRadius: 8)
+                        )
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.ai, lineWidth: 2))
+                        .help(mark.help)
+                }
+                switch model.state?.source {
+                case .wave, .station:
+                    WaveIcon(lineWidth: 2.3).frame(width: size * 1.3, height: size * 1.3)
+                default:
+                    EmptyView()
+                }
+                Text(label).lineLimit(1)
+            }
+            .font(Fonts.sans(size, .semibold))
+            .foregroundStyle(Color.accent)
+        }
+    }
+}
+
 // MARK: - Progress
 
-/// The track's bars; the played ones are yellow and glow. A click seeks.
+/// The track's bars; the played ones are yellow and glow. A click seeks. Under the info the times
+/// go under the bars; in the clip mode the bars run on one line between them.
 struct ProgressBars: View {
     @Environment(PlayerModel.self) private var model
     let metrics: Metrics
-    private static let count = 64
+    var clip = false
 
     var body: some View {
-        let heights = barHeights(model.current?.id ?? "", Self.count)
+        let count = clip ? 90 : 64
+        let heights = barHeights(model.current?.id ?? "", count)
         TimelineView(.periodic(from: .now, by: 0.25)) { context in
             let length = model.duration
             let position = model.position(at: context.date)
             let played = length > 0 ? min(1, position / length) : 0
-            VStack(spacing: 10) {
-                GeometryReader { geometry in
-                    HStack(alignment: .center, spacing: metrics.barGap) {
-                        ForEach(0..<Self.count, id: \.self) { bar in
-                            let lit = (Double(bar) + 0.5) / Double(Self.count) <= played
-                            Capsule()
-                                .fill(lit ? Color.accent : Color.white.opacity(0.30))
-                                .shadow(color: lit ? Color.accent.opacity(0.45) : .clear, radius: 7)
-                                .frame(height: geometry.size.height * heights[bar])
-                                .frame(maxWidth: .infinity)
-                        }
-                    }
-                    .frame(maxHeight: .infinity)
-                    .contentShape(Rectangle())
-                    .gesture(
-                        DragGesture(minimumDistance: 0).onEnded { drag in
-                            model.seek(fraction: drag.location.x / geometry.size.width)
-                        }
-                    )
-                }
-                .frame(height: metrics.bars)
-                HStack {
+            if clip {
+                HStack(spacing: 18) {
                     Text(formatTime(position)).foregroundStyle(.white)
-                    Spacer()
-                    Text(formatTime(length)).foregroundStyle(.white.opacity(0.7))
+                    bars(heights, played: played, gap: metrics.clipBarGap).frame(height: 40)
+                    Text(formatTime(length)).foregroundStyle(.white.opacity(0.72))
                 }
-                .font(Fonts.mono(metrics.times))
+                .font(Fonts.mono(metrics.clipTimes))
+            } else {
+                VStack(spacing: 10) {
+                    bars(heights, played: played, gap: metrics.barGap).frame(height: metrics.bars)
+                    HStack {
+                        Text(formatTime(position)).foregroundStyle(.white)
+                        Spacer()
+                        Text(formatTime(length)).foregroundStyle(.white.opacity(0.7))
+                    }
+                    .font(Fonts.mono(metrics.times))
+                }
+                .padding(.top, 8)
             }
-            .padding(.top, 8)
+        }
+    }
+
+    private func bars(_ heights: [Double], played: Double, gap: CGFloat) -> some View {
+        GeometryReader { geometry in
+            HStack(alignment: .center, spacing: gap) {
+                ForEach(heights.indices, id: \.self) { bar in
+                    let lit = (Double(bar) + 0.5) / Double(heights.count) <= played
+                    Capsule()
+                        .fill(lit ? Color.accent : Color.white.opacity(0.30))
+                        .shadow(color: lit ? Color.accent.opacity(0.45) : .clear, radius: 7)
+                        .frame(height: geometry.size.height * heights[bar])
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .frame(maxHeight: .infinity)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0).onEnded { drag in
+                    model.seek(fraction: drag.location.x / geometry.size.width)
+                }
+            )
         }
     }
 }
@@ -511,18 +570,41 @@ struct UpNext: View {
 // MARK: - Dock
 
 struct DockView: View {
+    let metrics: Metrics
+
+    var body: some View {
+        HStack(spacing: metrics.dockGap) {
+            TransportButtons(metrics: metrics)
+            Rectangle().fill(.white.opacity(0.16)).frame(width: 1, height: 64).padding(.horizontal, 4)
+            VolumeControls(metrics: metrics)
+        }
+        .padding(.vertical, 16)
+        .padding(.horizontal, min(32, max(16, metrics.width * 0.02)))
+        .background(
+            Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.6),
+            in: RoundedRectangle(cornerRadius: 44)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 44).stroke(.white.opacity(0.12), lineWidth: 1))
+        .shadow(color: .black.opacity(0.35), radius: 30, y: 24)
+    }
+}
+
+/// Dislike, previous, play, next and like; the clip mode's are of fixed sizes.
+struct TransportButtons: View {
     @Environment(PlayerModel.self) private var model
     let metrics: Metrics
+    var clip = false
 
     var body: some View {
         let track = model.current
         let liked = track.map(model.isLiked) ?? false
         let disliked = track.map(model.isDisliked) ?? false
-        let volume = model.state?.volume
-        let muted = volume == 0
-        HStack(spacing: metrics.dockGap) {
+        let small = clip ? 60 : metrics.small
+        let side = clip ? 80 : metrics.side
+        let play = clip ? 108 : metrics.play
+        HStack(spacing: clip ? metrics.clipDockGap : metrics.dockGap) {
             round(
-                metrics.small,
+                small,
                 glyph: .dislike,
                 share: 0.4,
                 fill: disliked ? .white.opacity(0.26) : .white.opacity(0.10),
@@ -532,7 +614,7 @@ struct DockView: View {
             )
             .disabled(track == nil)
             round(
-                metrics.side,
+                side,
                 glyph: .previous,
                 share: 0.38,
                 fill: .white.opacity(0.14),
@@ -543,20 +625,20 @@ struct DockView: View {
             Button(action: model.playPause) {
                 GlyphView(glyph: model.status.playing ? .pause : .play)
                     .frame(
-                        width: metrics.play * (model.status.playing ? 0.38 : 0.4),
-                        height: metrics.play * (model.status.playing ? 0.38 : 0.4)
+                        width: play * (model.status.playing ? 0.38 : 0.4),
+                        height: play * (model.status.playing ? 0.38 : 0.4)
                     )
                     // `margin-left: 7%` of a centered icon: half of it moves the icon.
-                    .offset(x: model.status.playing ? 0 : metrics.play * 0.035)
+                    .offset(x: model.status.playing ? 0 : play * 0.035)
                     .foregroundStyle(Color.ink)
-                    .frame(width: metrics.play, height: metrics.play)
+                    .frame(width: play, height: play)
                     .background(Color.accent, in: Circle())
                     .shadow(color: Color.accent.opacity(0.35), radius: 24, y: 16)
             }
             .buttonStyle(PressStyle())
             .help(model.status.playing ? "Pause" : "Play")
             round(
-                metrics.side,
+                side,
                 glyph: .next,
                 share: 0.38,
                 fill: .white.opacity(0.14),
@@ -566,7 +648,7 @@ struct DockView: View {
             )
             Button(action: model.like) {
                 GlyphView(glyph: liked ? .heartFilled : .heart)
-                    .frame(width: metrics.small * 0.46, height: metrics.small * 0.46)
+                    .frame(width: small * 0.46, height: small * 0.46)
                     .foregroundStyle(liked ? Color.ai : .white.opacity(0.82))
                     .keyframeAnimator(initialValue: 1.0, trigger: model.heartBeat) { heart, scale in
                         heart.scaleEffect(scale)
@@ -576,7 +658,7 @@ struct DockView: View {
                             CubicKeyframe(1, duration: 0.29)
                         }
                     }
-                    .frame(width: metrics.small, height: metrics.small)
+                    .frame(width: small, height: small)
                     .chip(
                         Circle(),
                         base: liked ? Color.like.opacity(0.22) : .white.opacity(0.10),
@@ -586,40 +668,7 @@ struct DockView: View {
             .buttonStyle(PressStyle())
             .disabled(track == nil)
             .help(liked ? "Remove from Liked" : "Like")
-            Rectangle().fill(.white.opacity(0.16)).frame(width: 1, height: 64).padding(.horizontal, 4)
-            HStack(spacing: 10) {
-                square(
-                    glyph: muted ? .muted : .audible,
-                    side: 28,
-                    help: muted ? "Unmute" : "Mute",
-                    action: model.toggleMute
-                )
-                square(glyph: .minus, side: 26, help: "Volume down") { model.stepVolume(-PlayerModel.volumeStep) }
-                VStack(spacing: 8) {
-                    Text(volume.map { String(Int(($0 * 100).rounded())) } ?? "—").font(Fonts.mono(22))
-                    GeometryReader { geometry in
-                        ZStack(alignment: .leading) {
-                            Capsule().fill(.white.opacity(0.18))
-                            Capsule().fill(muted ? .white.opacity(0.4) : .white).frame(
-                                width: geometry.size.width * (volume ?? 0)
-                            )
-                            .animation(.easeOut(duration: 0.3), value: volume)
-                        }
-                    }
-                    .frame(height: 10)
-                }
-                .frame(width: metrics.meter)
-                square(glyph: .plus, side: 26, help: "Volume up") { model.stepVolume(PlayerModel.volumeStep) }
-            }
         }
-        .padding(.vertical, 16)
-        .padding(.horizontal, min(32, max(16, metrics.width * 0.02)))
-        .background(
-            Color(red: 14 / 255, green: 16 / 255, blue: 22 / 255).opacity(0.6),
-            in: RoundedRectangle(cornerRadius: 44)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 44).stroke(.white.opacity(0.12), lineWidth: 1))
-        .shadow(color: .black.opacity(0.35), radius: 30, y: 24)
     }
 
     private func round(
@@ -641,13 +690,58 @@ struct DockView: View {
         .buttonStyle(PressStyle())
         .help(help)
     }
+}
+
+/// Mute, the volume with its meter, and the buttons that step it; the clip mode's are of fixed sizes.
+struct VolumeControls: View {
+    @Environment(PlayerModel.self) private var model
+    let metrics: Metrics
+    var clip = false
+
+    var body: some View {
+        let volume = model.state?.volume
+        let muted = volume == 0
+        HStack(spacing: 10) {
+            square(
+                glyph: muted ? .muted : .audible,
+                side: clip ? 26 : 28,
+                help: muted ? "Unmute" : "Mute",
+                action: model.toggleMute
+            )
+            square(glyph: .minus, side: clip ? 24 : 26, help: "Volume down") {
+                model.stepVolume(-PlayerModel.volumeStep)
+            }
+            VStack(spacing: clip ? 6 : 8) {
+                Text(volume.map { String(Int(($0 * 100).rounded())) } ?? "—").font(Fonts.mono(clip ? 20 : 22))
+                GeometryReader { geometry in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(.white.opacity(clip ? 0.2 : 0.18))
+                        Capsule().fill(muted ? .white.opacity(0.4) : .white).frame(
+                            width: geometry.size.width * (volume ?? 0)
+                        )
+                        .animation(.easeOut(duration: 0.3), value: volume)
+                    }
+                }
+                .frame(height: clip ? 8 : 10)
+            }
+            .frame(width: clip ? metrics.clipMeter : metrics.meter)
+            square(glyph: .plus, side: clip ? 24 : 26, help: "Volume up") {
+                model.stepVolume(PlayerModel.volumeStep)
+            }
+        }
+    }
 
     private func square(glyph: Glyph, side: CGFloat, help: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
+        let button = clip ? 60 : metrics.square
+        return Button(action: action) {
             GlyphView(glyph: glyph)
                 .frame(width: side, height: side)
-                .frame(width: metrics.square, height: metrics.square)
-                .chip(RoundedRectangle(cornerRadius: 20), base: .white.opacity(0.10), hover: .white.opacity(0.18))
+                .frame(width: button, height: button)
+                .chip(
+                    RoundedRectangle(cornerRadius: clip ? 18 : 20),
+                    base: .white.opacity(clip ? 0.12 : 0.10),
+                    hover: .white.opacity(0.18)
+                )
         }
         .buttonStyle(PressStyle())
         .help(help)

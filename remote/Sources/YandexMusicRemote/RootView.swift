@@ -12,7 +12,6 @@ struct RootView: View {
     @Environment(PlayerModel.self) private var model
     @Environment(VideoStage.self) private var videos
     let frames: Frames
-    let idle: Bool
 
     @State private var cover: NSImage?
     @State private var label: NSImage?
@@ -30,36 +29,12 @@ struct RootView: View {
             )
             let front = model.showsVideoInFront
             ZStack(alignment: .topLeading) {
-                BackgroundView(palette: palette, blurred: blurred, idle: idle)
-                VStack(spacing: 0) {
-                    TopBar(frames: frames, metrics: metrics)
-                    VStack(spacing: 16) {
-                        HStack(spacing: metrics.nowGap) {
-                            ArtView(
-                                size: metrics.cover,
-                                palette: palette,
-                                cover: cover,
-                                label: label,
-                                recordOut: recordOut
-                            )
-                                .id(model.current?.id)
-                                .transition(
-                                    .asymmetric(
-                                        insertion: .offset(y: 28).combined(with: .scale(scale: 0.96)),
-                                        removal: .identity
-                                    )
-                                )
-                            InfoView(metrics: metrics)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        DockView(metrics: metrics)
-                    }
-                    .padding(.horizontal, metrics.gutter)
-                    .padding(.bottom, metrics.bottom)
-                    .padding(.trailing, model.drawerOpen ? metrics.drawer + 8 : 0)
+                BackgroundView(palette: palette, blurred: blurred)
+                if front {
+                    ClipView(metrics: metrics)
+                } else {
+                    player(metrics)
                 }
-                .opacity(front && idle ? 0 : 1)
-                .animation(.easeInOut(duration: 0.4), value: idle)
                 if model.drawerOpen {
                     DrawerView()
                         .frame(width: min(metrics.drawer, geometry.size.width - 24))
@@ -86,6 +61,37 @@ struct RootView: View {
         .foregroundStyle(.white)
         .task(id: model.current?.id) { await loadArt(model.current) }
         .onChange(of: model.playing, initial: true) { _, playing in holdRecord(playing) }
+    }
+
+    /// The player: the top bar, the cover and the track's info, and the dock.
+    private func player(_ metrics: Metrics) -> some View {
+        VStack(spacing: 0) {
+            TopBar(frames: frames, metrics: metrics)
+            VStack(spacing: 16) {
+                HStack(spacing: metrics.nowGap) {
+                    ArtView(
+                        size: metrics.cover,
+                        palette: palette,
+                        cover: cover,
+                        label: label,
+                        recordOut: recordOut
+                    )
+                    .id(model.current?.id)
+                    .transition(
+                        .asymmetric(
+                            insertion: .offset(y: 28).combined(with: .scale(scale: 0.96)),
+                            removal: .identity
+                        )
+                    )
+                    InfoView(metrics: metrics)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                DockView(metrics: metrics)
+            }
+            .padding(.horizontal, metrics.gutter)
+            .padding(.bottom, metrics.bottom)
+            .padding(.trailing, model.drawerOpen ? metrics.drawer + 8 : 0)
+        }
     }
 
     /// The cover, the record's label, the blurred background and the palette of a track. The
