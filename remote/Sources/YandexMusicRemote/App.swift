@@ -218,12 +218,9 @@ struct WindowContent: View {
         case 49: model.playPause()  // space
         case 124: model.nextTrack()  // →
         case 123: model.previous()  // ←
-        case 126: model.stepVolume(PlayerModel.volumeStep)  // ↑
-        case 125: model.stepVolume(-PlayerModel.volumeStep)  // ↓
         default:
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "l": model.like()
-            case "m": model.toggleMute()
             case "q": model.openDrawer(!model.drawerOpen || model.tab != .queue, .queue)
             case "/": model.openDrawer(true, .search)
             case "f": event.window?.toggleFullScreen(nil)

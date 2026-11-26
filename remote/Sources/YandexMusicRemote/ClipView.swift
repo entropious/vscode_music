@@ -1,8 +1,8 @@
 import SwiftUI
 
 /// The clip mode, with the video in front: the clock and the way back to the player on top; the
-/// progress over the whole width at the bottom, and under it the track, the buttons in the middle
-/// and the volume.
+/// progress over the whole width at the bottom, and under it the artist, the buttons in the middle
+/// and the track's title.
 struct ClipView: View {
     @Environment(PlayerModel.self) private var model
     let metrics: Metrics
@@ -33,8 +33,14 @@ struct ClipView: View {
                         )
                         .overlay(RoundedRectangle(cornerRadius: 40).stroke(.white.opacity(0.12), lineWidth: 1))
                         .shadow(color: .black.opacity(0.4), radius: 25, y: 20)
-                    VolumeControls(metrics: metrics, clip: true)
-                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    // As wide as the info, so the buttons stay in the middle.
+                    Text(model.current?.fullTitle ?? "")
+                        .font(Fonts.sans(metrics.clipTitle, .bold))
+                        .tracking(-0.03 * metrics.clipTitle)
+                        .foregroundStyle(.white.opacity(0.55))
+                        .lineLimit(1)
+                        .padding(.vertical, Fonts.trim(to: 1.05, size: metrics.clipTitle))
+                        .frame(maxWidth: .infinity, alignment: .leading)
                 }
             }
             .padding(.horizontal, metrics.gutter)
@@ -42,7 +48,7 @@ struct ClipView: View {
         }
     }
 
-    /// The artist in large letters, as on the player, the track's title under it.
+    /// The source and the artist in large letters; the track's title is on the other side of the buttons.
     private var info: some View {
         let track = model.current
         let size = metrics.clipTitle
@@ -54,12 +60,6 @@ struct ClipView: View {
                 .lineLimit(1)
                 .padding(.vertical, Fonts.trim(to: 1.05, size: size))
                 .shadow(color: .black.opacity(0.5), radius: 15, y: 4)
-            if let track {
-                Text(track.fullTitle)
-                    .font(Fonts.sans(metrics.clipSubtitle))
-                    .foregroundStyle(.white.opacity(0.78))
-                    .lineLimit(1)
-            }
         }
     }
 

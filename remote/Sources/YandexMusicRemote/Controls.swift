@@ -16,8 +16,6 @@ struct Metrics {
     var play: CGFloat { drawerOpen ? clamp(84, 7.6 * vw, 130) : clamp(96, 10.4 * vw, 150) }
     var side: CGFloat { drawerOpen ? clamp(62, 5.2 * vw, 92) : clamp(70, 6.8 * vw, 104) }
     var small: CGFloat { drawerOpen ? clamp(52, 4.4 * vw, 76) : clamp(58, 5.4 * vw, 84) }
-    var square: CGFloat { drawerOpen ? 56 : 64 }
-    var meter: CGFloat { drawerOpen ? clamp(80, 7 * vw, 150) : clamp(110, 11 * vw, 180) }
     var dockGap: CGFloat { drawerOpen ? clamp(8, 1 * vw, 20) : clamp(12, 1.6 * vw, 24) }
     var drawer: CGFloat { clamp(360, 32 * vw, 500) }
     var gutter: CGFloat { clamp(16, 2.8 * vw, 40) }
@@ -34,13 +32,11 @@ struct Metrics {
 
     // The clip mode's sizes, with the video in front.
     var clipTitle: CGFloat { clamp(32, 3.8 * vw, 64) }
-    var clipSubtitle: CGFloat { clamp(18, 1.8 * vw, 30) }
     var clipSource: CGFloat { clamp(15, 1.25 * vw, 19) }
     var clipTimes: CGFloat { clamp(16, 1.5 * vw, 22) }
     var clipBarGap: CGFloat { clamp(2, 0.3 * vw, 5) }
     var clipDockGap: CGFloat { clamp(10, 1.3 * vw, 20) }
-    var clipMeter: CGFloat { clamp(90, 9 * vw, 150) }
-    var clipBottom: CGFloat { clamp(16, 2.8 * vh, 32) }
+    var clipBottom: CGFloat { clamp(8, 1.5 * vh, 16) }
 }
 
 /// The wave of My Vibe: `M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0` in a 24×24 box.

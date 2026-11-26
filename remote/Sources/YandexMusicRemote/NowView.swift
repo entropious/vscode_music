@@ -573,11 +573,7 @@ struct DockView: View {
     let metrics: Metrics
 
     var body: some View {
-        HStack(spacing: metrics.dockGap) {
-            TransportButtons(metrics: metrics)
-            Rectangle().fill(.white.opacity(0.16)).frame(width: 1, height: 64).padding(.horizontal, 4)
-            VolumeControls(metrics: metrics)
-        }
+        TransportButtons(metrics: metrics)
         .padding(.vertical, 16)
         .padding(.horizontal, min(32, max(16, metrics.width * 0.02)))
         .background(
@@ -686,62 +682,6 @@ struct TransportButtons: View {
                 .foregroundStyle(color)
                 .frame(width: size, height: size)
                 .chip(Circle(), base: fill, hover: .white.opacity(0.2))
-        }
-        .buttonStyle(PressStyle())
-        .help(help)
-    }
-}
-
-/// Mute, the volume with its meter, and the buttons that step it; the clip mode's are of fixed sizes.
-struct VolumeControls: View {
-    @Environment(PlayerModel.self) private var model
-    let metrics: Metrics
-    var clip = false
-
-    var body: some View {
-        let volume = model.state?.volume
-        let muted = volume == 0
-        HStack(spacing: 10) {
-            square(
-                glyph: muted ? .muted : .audible,
-                side: clip ? 26 : 28,
-                help: muted ? "Unmute" : "Mute",
-                action: model.toggleMute
-            )
-            square(glyph: .minus, side: clip ? 24 : 26, help: "Volume down") {
-                model.stepVolume(-PlayerModel.volumeStep)
-            }
-            VStack(spacing: clip ? 6 : 8) {
-                Text(volume.map { String(Int(($0 * 100).rounded())) } ?? "—").font(Fonts.mono(clip ? 20 : 22))
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(.white.opacity(clip ? 0.2 : 0.18))
-                        Capsule().fill(muted ? .white.opacity(0.4) : .white).frame(
-                            width: geometry.size.width * (volume ?? 0)
-                        )
-                        .animation(.easeOut(duration: 0.3), value: volume)
-                    }
-                }
-                .frame(height: clip ? 8 : 10)
-            }
-            .frame(width: clip ? metrics.clipMeter : metrics.meter)
-            square(glyph: .plus, side: clip ? 24 : 26, help: "Volume up") {
-                model.stepVolume(PlayerModel.volumeStep)
-            }
-        }
-    }
-
-    private func square(glyph: Glyph, side: CGFloat, help: String, action: @escaping () -> Void) -> some View {
-        let button = clip ? 60 : metrics.square
-        return Button(action: action) {
-            GlyphView(glyph: glyph)
-                .frame(width: side, height: side)
-                .frame(width: button, height: button)
-                .chip(
-                    RoundedRectangle(cornerRadius: clip ? 18 : 20),
-                    base: .white.opacity(clip ? 0.12 : 0.10),
-                    hover: .white.opacity(0.18)
-                )
         }
         .buttonStyle(PressStyle())
         .help(help)

@@ -19,9 +19,6 @@ struct Toast: Equatable {
 @MainActor
 @Observable
 final class PlayerModel {
-    static let volumeStep = 0.1
-    /// Volume restored by unmuting when nothing was muted in this session.
-    static let defaultVolume = 0.7
     private static let searchDelay: TimeInterval = 0.45
     private static let videoFrontKey = "videoInFront"
 
@@ -44,7 +41,6 @@ final class PlayerModel {
     private var waveOptionsRequested = false
     private var accountRequested = false
     private var lastError: String?
-    private var preMuteVolume = PlayerModel.defaultVolume
     private var searchWork: DispatchWorkItem?
     /// Whether videos are wanted in front of the player, as the Video button left it: kept across tracks and launches.
     var videoFront = UserDefaults.standard.bool(forKey: PlayerModel.videoFrontKey)
@@ -237,24 +233,6 @@ final class PlayerModel {
         status.position = target
         statusAt = Date()
         run("seek", [.number(target)])
-    }
-
-    func setVolume(_ value: Double) {
-        let volume = (min(1, max(0, value)) * 100).rounded() / 100
-        state?.volume = volume  // shown at once; the service confirms with its next state
-        run("setVolume", [.number(volume)])
-    }
-
-    func stepVolume(_ delta: Double) { setVolume((state?.volume ?? Self.defaultVolume) + delta) }
-
-    func toggleMute() {
-        let volume = state?.volume ?? Self.defaultVolume
-        if volume > 0 {
-            preMuteVolume = volume
-            setVolume(0)
-        } else {
-            setVolume(preMuteVolume > 0 ? preMuteVolume : Self.defaultVolume)
-        }
     }
 
     /// Picking the chosen option again leaves the setting to Yandex Music.

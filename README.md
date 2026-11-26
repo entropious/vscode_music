@@ -101,8 +101,7 @@ in with Homebrew when it isn't there; without it those videos are left out.
 |---|---|
 | `Space` | Play / pause |
 | `←` / `→` | Previous / next track |
-| `↑` / `↓` | Volume |
-| `L` / `M` | Like / mute |
+| `L` | Like |
 | `Q` / `/` | Queue / search |
 | `F` | Leave or enter full screen |
 | `V` | Bring the background video to the front, or put it back |

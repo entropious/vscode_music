@@ -3,7 +3,7 @@ import SwiftUI
 /// The dock's icons, as the web version's SVGs draw them in a 24×24 box: outlines of the same
 /// width, scaled with the icon, and the shapes filled where the SVG fills them.
 enum Glyph: CaseIterable {
-    case dislike, previous, next, play, pause, heart, heartFilled, muted, audible, minus, plus
+    case dislike, previous, next, play, pause, heart, heartFilled
 
     /// Each glyph as one shape to fill in the 24×24 box, its outlines turned into areas; built once.
     fileprivate static let outlines: [Glyph: Path] = Dictionary(
@@ -53,19 +53,7 @@ enum Glyph: CaseIterable {
             [Part(path: heartPath, stroke: 1.9)]
         case .heartFilled:
             [Part(path: heartPath, filled: true)]
-        case .muted:
-            [Part(path: speaker, stroke: 1.9),
-             Part(path: line((16, 9.5), (21, 14.5)), stroke: 1.9),
-             Part(path: line((21, 9.5), (16, 14.5)), stroke: 1.9)]
-        case .audible:
-            [Part(path: speaker, stroke: 1.9),
-             Part(path: arc(center: (13.354, 12), radius: 4, from: -48.6, to: 48.6), stroke: 1.9),
-             Part(path: arc(center: (13.401, 12), radius: 7.5, from: -47.17, to: 47.17), stroke: 1.9)]
-        case .minus:
-            [Part(path: line((5, 12), (19, 12)), stroke: 2.4)]
-        case .plus:
-            [Part(path: line((12, 5), (12, 19)), stroke: 2.4),
-             Part(path: line((5, 12), (19, 12)), stroke: 2.4)]        }
+        }
     }
 }
 
@@ -96,9 +84,6 @@ private func arc(center: Point, radius: CGFloat, from start: Double, to end: Dou
     }
     return path
 }
-
-/// `M4 9h3l5-4v14l-5-4H4z`
-private let speaker = polygon([(4, 9), (7, 9), (12, 5), (12, 19), (7, 15), (4, 15)])
 
 /// `M12 20s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10c0 5.6-7 10-7 10z`
 private let heartPath: Path = {
