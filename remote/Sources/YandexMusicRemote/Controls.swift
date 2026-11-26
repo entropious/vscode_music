@@ -112,3 +112,8 @@ extension View {
 }
 
 let ease = Animation.timingCurve(0.2, 0.8, 0.2, 1, duration: 0.55)
+
+extension AnyTransition {
+    /// Gone at once, so the view replacing it doesn't share the layout with it while it comes in.
+    static var gone: AnyTransition { .opacity.animation(.linear(duration: 0)) }
+}

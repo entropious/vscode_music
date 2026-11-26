@@ -80,7 +80,7 @@ struct RootView: View {
                     .transition(
                         .asymmetric(
                             insertion: .offset(y: 28).combined(with: .scale(scale: 0.96)),
-                            removal: .identity
+                            removal: .gone
                         )
                     )
                     InfoView(metrics: metrics)

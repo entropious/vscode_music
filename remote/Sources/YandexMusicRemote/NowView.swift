@@ -369,7 +369,7 @@ struct InfoView: View {
             .transition(
                 .asymmetric(
                     insertion: .opacity.combined(with: .offset(y: 28)).combined(with: .scale(scale: 0.96)),
-                    removal: .identity
+                    removal: .gone
                 )
             )
             extras
